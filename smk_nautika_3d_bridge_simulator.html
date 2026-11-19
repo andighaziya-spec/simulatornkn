@@ -1,0 +1,3686 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SMK Nautika - 3D Bridge Simulator</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Three.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <!-- Tone.js untuk Efek Suara Maritim -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
+    <!-- Font Awesome & Google Fonts -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700;800&family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            overflow: hidden;
+            user-select: none;
+            background-color: #050b14;
+            color: #e2e8f0;
+        }
+        .font-mono-tech {
+            font-family: 'JetBrains Mono', monospace;
+        }
+        #canvas-container {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            z-index: 1;
+        }
+        .ui-layer {
+            position: relative;
+            z-index: 10;
+            pointer-events: none;
+            width: 100vw;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+        }
+        .interactive-panel {
+            pointer-events: auto;
+            background: rgba(10, 19, 34, 0.88);
+            backdrop-filter: blur(8px);
+            border: 1px solid rgba(56, 189, 248, 0.25);
+            box-shadow: 0 10px 30px -5px rgba(0, 0, 0, 0.7), inset 0 1px 0 0 rgba(255, 255, 255, 0.1);
+        }
+        /* Custom Range Slider untuk Kemudi */
+        input[type=range].rudder-slider {
+            -webkit-appearance: none;
+            width: 100%;
+            background: transparent;
+        }
+        input[type=range].rudder-slider:focus {
+            outline: none;
+        }
+        input[type=range].rudder-slider::-webkit-slider-runnable-track {
+            width: 100%;
+            height: 12px;
+            cursor: pointer;
+            background: linear-gradient(90deg, #ef4444 0%, #ef4444 45%, #cbd5e1 50%, #22c55e 55%, #22c55e 100%);
+            border-radius: 6px;
+            border: 1px solid #334155;
+        }
+        input[type=range].rudder-slider::-webkit-slider-thumb {
+            height: 26px;
+            width: 14px;
+            border-radius: 3px;
+            background: #f8fafc;
+            border: 2px solid #0284c7;
+            cursor: pointer;
+            -webkit-appearance: none;
+            margin-top: -8px;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.6);
+        }
+        /* Animasi Radar Sweep */
+        .radar-container {
+            position: relative;
+            border-radius: 50%;
+            overflow: hidden;
+            box-shadow: inset 0 0 25px rgba(16, 185, 129, 0.35), 0 0 15px rgba(16, 185, 129, 0.15);
+            cursor: crosshair;
+        }
+        .ecdis-container {
+            position: relative;
+            overflow: hidden;
+            box-shadow: inset 0 0 18px rgba(14, 165, 233, 0.25);
+            cursor: crosshair;
+        }
+        .nav-tab-btn.active {
+            background-color: #0284c7;
+            color: #ffffff;
+            border-color: #38bdf8;
+        }
+        /* Bingkai Jendela Anjungan */
+        .bridge-frame {
+            position: absolute;
+            inset: 0;
+            pointer-events: none;
+            z-index: 5;
+            border-top: 28px solid #090d16;
+            border-left: 18px solid #090d16;
+            border-right: 18px solid #090d16;
+        }
+        .bridge-pillar-left {
+            position: absolute;
+            top: 0; bottom: 0; left: 22%;
+            width: 16px;
+            background: linear-gradient(90deg, #090d16, #1e293b, #090d16);
+            transform: skewX(-8deg);
+            z-index: 5;
+            pointer-events: none;
+        }
+        .bridge-pillar-right {
+            position: absolute;
+            top: 0; bottom: 0; right: 22%;
+            width: 16px;
+            background: linear-gradient(90deg, #090d16, #1e293b, #090d16);
+            transform: skewX(8deg);
+            z-index: 5;
+            pointer-events: none;
+        }
+        /* Tombol EOT (Engine Order Telegraph) */
+        .eot-btn {
+            transition: all 0.15s ease;
+        }
+        .eot-btn.active {
+            background-color: #0284c7;
+            color: #ffffff;
+            border-color: #38bdf8;
+            box-shadow: 0 0 12px rgba(56, 189, 248, 0.6);
+            font-weight: 700;
+        }
+        .eot-btn.active-astern {
+            background-color: #dc2626;
+            color: #ffffff;
+            border-color: #f87171;
+            box-shadow: 0 0 12px rgba(248, 113, 113, 0.6);
+            font-weight: 700;
+        }
+        .eot-btn.active-stop {
+            background-color: #d97706;
+            color: #ffffff;
+            border-color: #fbbf24;
+            box-shadow: 0 0 12px rgba(251, 191, 36, 0.6);
+            font-weight: 700;
+        }
+        /* Kontrol Layar Sentuh (PID / Touchscreen): Roda Kemudi & Tuas Telegraph */
+        .touch-helm-zone {
+            touch-action: none;
+            user-select: none;
+            cursor: grab;
+        }
+        .touch-helm-zone:active {
+            cursor: grabbing;
+        }
+        .eot-lever-track {
+            touch-action: none;
+            user-select: none;
+            position: relative;
+            background: linear-gradient(180deg, 
+                rgba(16, 185, 129, 0.25) 0%, 
+                rgba(20, 184, 166, 0.15) 50%, 
+                rgba(245, 158, 11, 0.3) 66.6%, 
+                rgba(239, 68, 68, 0.3) 100%);
+            border: 2px solid #334155;
+            box-shadow: inset 0 4px 12px rgba(0,0,0,0.85);
+        }
+        .eot-lever-handle {
+            position: absolute;
+            left: -6px;
+            right: -6px;
+            height: 30px;
+            margin-top: -15px;
+            background: linear-gradient(180deg, #f8fafc 0%, #94a3b8 50%, #475569 100%);
+            border: 2px solid #0f172a;
+            border-radius: 8px;
+            box-shadow: 0 6px 14px rgba(0,0,0,0.8), inset 0 1px 1px rgba(255,255,255,0.9);
+            cursor: grab;
+            transition: top 0.12s cubic-bezier(0.22, 1, 0.36, 1);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 20;
+        }
+        .eot-lever-handle.dragging {
+            transition: none;
+            cursor: grabbing;
+            transform: scale(1.04);
+        }
+        /* Animasi Peringatan Bahaya Tubrukan (Collision Warning) & Efek Benturan */
+        @keyframes pulse-danger {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.65; transform: scale(1.03); }
+        }
+        .proximity-banner {
+            animation: pulse-danger 0.7s infinite ease-in-out;
+        }
+        .damage-flash-overlay {
+            position: fixed;
+            inset: 0;
+            pointer-events: none;
+            z-index: 40;
+            background: radial-gradient(circle, rgba(220,38,38,0) 40%, rgba(220,38,38,0.75) 100%);
+            opacity: 0;
+            transition: opacity 0.15s ease-out;
+        }
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: #0f172a; }
+        ::-webkit-scrollbar-thumb { background: #334155; border-radius: 3px; }
+    </style>
+</head>
+<body>
+
+    <!-- 3D Canvas Container -->
+    <div id="canvas-container"></div>
+
+    <!-- Efek Kilatan Merah Saat Terjadi Benturan (Collision Impact Overlay) -->
+    <div id="damage-overlay" class="damage-flash-overlay"></div>
+
+    <!-- Bingkai Jendela Anjungan (Visual Imersi) -->
+    <div class="bridge-frame hidden md:block"></div>
+    <div class="bridge-pillar-left hidden lg:block"></div>
+    <div class="bridge-pillar-right hidden lg:block"></div>
+
+    <!-- UI Layer Utama -->
+    <div class="ui-layer p-2 sm:p-4">
+
+        <!-- BAGIAN ATAS: HUD INSTRUMEN & MISI -->
+        <div class="flex flex-wrap justify-between items-start gap-2 w-full">
+            
+            <!-- Kiri: Identitas & Skenario Praktik -->
+            <div class="interactive-panel rounded-xl p-3 flex flex-col gap-2 max-w-xs sm:max-w-sm">
+                <div class="flex items-center justify-between border-b border-slate-700/80 pb-2">
+                    <div class="flex items-center gap-2">
+                        <i class="fa-solid fa-anchor text-sky-400 text-lg"></i>
+                        <div>
+                            <h1 class="text-xs sm:text-sm font-bold tracking-wider uppercase text-sky-400">KM AA 8480 Simulator</h1>
+                            <p class="text-[10px] text-slate-400">Kapal Penumpang PELNI • Praktik P2TL COLREGs</p>
+                        </div>
+                    </div>
+                    <button id="btn-panduan" class="bg-sky-500/20 hover:bg-sky-500/40 text-sky-300 border border-sky-500/40 px-2.5 py-1 rounded text-xs font-semibold transition flex items-center gap-1">
+                        <i class="fa-solid fa-book-open"></i> Modul
+                    </button>
+                </div>
+
+                <!-- Pilihan Skenario Khusus P2TL (COLREGs 1972) Berjenjang -->
+                <div class="flex flex-col gap-1.5">
+                    <div class="flex items-center justify-between text-xs">
+                        <span class="text-slate-400 font-medium">Misi P2TL (COLREGs 1972):</span>
+                        <span id="vessel-badge" class="bg-sky-500/20 text-sky-300 border border-sky-500/30 px-1.5 py-0.5 rounded text-[10px] font-mono-tech font-bold">KM AA 8480</span>
+                    </div>
+                    <select id="scenario-select" class="bg-slate-900 border border-slate-700 text-slate-200 text-xs rounded-lg p-2 focus:border-sky-500 focus:outline-none">
+                        <option value="1">⚓ Misi 1: Aturan 9 - Alur Pelayaran Sempit (Narrow Channel)</option>
+                        <option value="2">⚓ Misi 2: Aturan 14 - Situasi Berhadapan (Head-On)</option>
+                        <option value="3">⚓ Misi 3: Aturan 15 - Bersilangan Beri Jalan (Crossing Give-Way)</option>
+                        <option value="4">⚓ Misi 4: Aturan 17 - Kapal Bertahan (Crossing Stand-On)</option>
+                        <option value="5">⚓ Misi 5: Aturan 13 - Penyusulan (Overtaking)</option>
+                        <option value="6">⚓ Misi 6: Aturan 18 - Tanggung Jawab Antar Kapal (Kapal Ikan)</option>
+                        <option value="7">⚓ Misi 7: Olah Gerak Sandar di Pelabuhan (Berthing)</option>
+                        <option value="8">⚓ Misi 8: Olah Gerak Keluar Pelabuhan (Departure)</option>
+                    </select>
+                </div>
+
+                <!-- Status Objektif Misi -->
+                <div class="bg-slate-900/90 border border-slate-800 rounded-lg p-2.5 text-xs">
+                    <div class="flex items-center justify-between mb-1">
+                        <span class="font-bold text-amber-400 flex items-center gap-1.5">
+                            <i class="fa-solid fa-bullseye"></i> Instruksi Misi:
+                        </span>
+                        <span id="mission-distance" class="font-mono-tech text-sky-300 font-bold">Jarak: 0.0 NM</span>
+                    </div>
+                    <p id="mission-desc" class="text-slate-300 text-[11px] leading-relaxed">
+                        Kemudikan kapal melewati tengah gerbang pelampung Merah (Kiri/Port) dan Hijau (Kanan/Starboard) menuju titik labuh.
+                    </p>
+                </div>
+            </div>
+
+            <!-- Tengah: Overhead Gyro Compass & Indikator Navigasi Utama -->
+            <div class="interactive-panel rounded-xl px-4 py-2.5 flex flex-col items-center border-t-4 border-t-sky-500 mx-auto order-first sm:order-none w-full sm:w-auto">
+                <!-- Pita Kompas Digital -->
+                <div class="flex items-center gap-6 sm:gap-8">
+                    <div class="text-center">
+                        <span class="text-[10px] uppercase tracking-widest text-slate-400 block">Speed (SOG)</span>
+                        <div class="font-mono-tech text-xl sm:text-2xl font-extrabold text-emerald-400">
+                            <span id="hud-speed">0.0</span> <span class="text-xs font-normal text-slate-400">KTS</span>
+                        </div>
+                    </div>
+
+                    <div class="text-center bg-slate-950 px-5 py-1.5 rounded-lg border border-slate-700 shadow-inner">
+                        <span class="text-[10px] uppercase tracking-widest text-sky-400 block">HDG (Gyro)</span>
+                        <div class="font-mono-tech text-2xl sm:text-3xl font-extrabold text-amber-400 tracking-wider">
+                            <span id="hud-heading">000</span>°
+                        </div>
+                    </div>
+
+                    <div class="text-center">
+                        <span class="text-[10px] uppercase tracking-widest text-slate-400 block">Rate of Turn</span>
+                        <div class="font-mono-tech text-xl sm:text-2xl font-extrabold text-sky-300">
+                            <span id="hud-rot">0.0</span> <span class="text-xs font-normal text-slate-400">°/m</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Baris Info Sekunder: UKC, Angin, Koordinat -->
+                <div class="flex items-center gap-4 mt-2 pt-1.5 border-t border-slate-800 text-[11px] font-mono-tech text-slate-300">
+                    <div><i class="fa-solid fa-water text-sky-400 mr-1"></i>UKC: <span id="hud-depth" class="text-white font-bold">24.5</span>m</div>
+                    <div><i class="fa-solid fa-wind text-teal-400 mr-1"></i>Angin: <span id="hud-wind" class="text-white">045° / 8 kt (Tenang)</span></div>
+                    <div class="hidden md:block"><i class="fa-solid fa-location-crosshairs text-rose-400 mr-1"></i>POS: <span id="hud-pos">06°05.12'S 106°53.40'E</span></div>
+                </div>
+            </div>
+
+            <!-- Kanan: Kontrol Lingkungan, Cuaca, Gelombang, Kamera & Suara -->
+            <div class="interactive-panel rounded-xl p-3 flex flex-col gap-2">
+                <div class="text-[11px] font-bold text-slate-400 uppercase tracking-wider border-b border-slate-700/80 pb-1 flex justify-between items-center">
+                    <span>Kontrol Anjungan & Cuaca</span>
+                    <span id="sea-state-badge" class="text-[9px] font-mono-tech text-teal-300 bg-teal-950/80 border border-teal-600/40 px-1.5 py-0.5 rounded">Beaufort 2</span>
+                </div>
+                <div class="grid grid-cols-2 sm:grid-cols-3 gap-1.5">
+                    <button id="btn-time" class="bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-600 px-2.5 py-1.5 rounded-lg text-xs flex items-center justify-center gap-1.5 transition" title="Ubah Waktu Siang/Malam untuk latihan lampu P2TL">
+                        <i class="fa-solid fa-sun text-amber-400" id="icon-time"></i> <span id="text-time">Siang</span>
+                    </button>
+                    <button id="btn-weather" class="bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-600 px-2.5 py-1.5 rounded-lg text-xs flex items-center justify-center gap-1.5 transition" title="Atur Kondisi Cuaca & Jarak Pandang (Aturan 19 P2TL)">
+                        <i class="fa-solid fa-cloud-sun text-sky-300" id="icon-weather"></i> <span id="text-weather">Cerah</span>
+                    </button>
+                    <button id="btn-waves" class="bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-600 px-2.5 py-1.5 rounded-lg text-xs flex items-center justify-center gap-1.5 transition" title="Atur Tinggi Gelombang Laut (Sea State / Beaufort)">
+                        <i class="fa-solid fa-water text-teal-400" id="icon-waves"></i> <span id="text-waves">Tenang</span>
+                    </button>
+                    <button id="btn-cam" class="bg-sky-900/70 hover:bg-sky-800 text-sky-200 border border-sky-500/50 px-2.5 py-1.5 rounded-lg text-xs flex items-center justify-center gap-1.5 transition" title="Ganti Sudut Pandang: Anjungan / Drone Atas / Orbit">
+                        <i class="fa-solid fa-helicopter text-sky-400"></i> <span id="text-cam">Drone Atas</span>
+                    </button>
+                    <button id="btn-vessel" class="bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-600 px-2.5 py-1.5 rounded-lg text-xs flex items-center justify-center gap-1.5 transition" title="Mode Respon Kemudi & Manuver Kapal">
+                        <i class="fa-solid fa-ship text-emerald-400"></i> <span id="text-vessel">Dinas Normal</span>
+                    </button>
+                    <button id="btn-reset" class="bg-rose-950/60 hover:bg-rose-900/80 text-rose-200 border border-rose-700/50 px-2.5 py-1.5 rounded-lg text-xs flex items-center justify-center gap-1.5 transition">
+                        <i class="fa-solid fa-rotate-left"></i> Ulang Misi
+                    </button>
+                </div>
+                <div class="text-[10px] text-slate-400 text-center mt-0.5 flex items-center justify-between px-1">
+                    <span><i class="fa-solid fa-cloud-showers-heavy mr-1 text-sky-400"></i>Cuaca & Gelombang aktif</span>
+                    <button id="btn-engine-sound" class="text-[10px] font-mono-tech font-bold text-emerald-400 hover:text-emerald-300 flex items-center gap-1" title="Aktif/Nonaktifkan Suara Mesin Diesel Kapal">
+                        <i class="fa-solid fa-volume-high" id="icon-engine-sound"></i> <span id="text-engine-sound">Mesin: ON</span>
+                    </button>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- BANNER PERINGATAN DINI AKAN MENABRAK (COLLISION PROXIMITY ALARM) -->
+        <div id="proximity-warning" class="hidden self-center proximity-banner interactive-panel border-2 border-rose-500 bg-rose-950/90 px-5 py-2.5 rounded-xl text-center shadow-2xl">
+            <div class="flex items-center gap-3">
+                <i class="fa-solid fa-radiation text-2xl text-rose-400 animate-spin"></i>
+                <div class="text-left">
+                    <div class="text-xs sm:text-sm font-extrabold text-white uppercase tracking-wider">⚠️ AWAS BAHAYA TUBRUKAN (COLLISION RISK)!</div>
+                    <div id="proximity-detail" class="text-[11px] font-mono-tech text-rose-200">Jarak CPA kritis! Segera olah gerak menghindar atau tarik tuas Astern!</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- NOTIFIKASI / PERINGATAN TENGAH (P2TL / Pelanggaran / Selesai) -->
+        <div id="alert-box" class="hidden self-center interactive-panel border-2 border-amber-500 bg-slate-950/95 px-6 py-4 rounded-2xl max-w-md text-center shadow-2xl transition-all">
+            <div id="alert-icon" class="text-3xl mb-1 text-amber-400"><i class="fa-solid fa-triangle-exclamation"></i></div>
+            <h3 id="alert-title" class="font-bold text-base text-white uppercase tracking-wide">Peringatan Navigasi</h3>
+            <p id="alert-msg" class="text-xs text-slate-300 mt-1 leading-relaxed"></p>
+            <div class="mt-3 flex justify-center gap-2">
+                <button id="alert-action-btn" class="bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs px-5 py-2 rounded-lg transition shadow-lg">Mengerti</button>
+            </div>
+        </div>
+
+        <!-- PANEL ABA-ABA SIAGA MULAI MISI (MISSION START BRIEFING & COUNTDOWN) -->
+        <div id="mission-start-overlay" class="self-center interactive-panel border-2 border-sky-400 bg-slate-950/95 px-6 py-5 rounded-2xl max-w-lg w-full text-center shadow-2xl transition-all">
+            <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-sky-500/20 border border-sky-400/40 text-sky-300 text-xs font-mono-tech font-bold mb-2">
+                <i class="fa-solid fa-anchor"></i> KAPAL PENUMPANG PELNI • KM AA 8480
+            </div>
+            <h2 id="briefing-title" class="text-base sm:text-lg font-extrabold text-white uppercase tracking-wide">
+                MISI 1: ATURAN 9 - ALUR PELAYARAN SEMPIT
+            </h2>
+            <p id="briefing-desc" class="text-xs text-slate-300 mt-1.5 leading-relaxed bg-slate-900/90 p-3 rounded-xl border border-slate-800 text-left"></p>
+            <div id="briefing-horn-rule" class="mt-2 bg-amber-950/60 border border-amber-500/50 rounded-xl p-2.5 text-xs text-amber-200 flex items-center gap-2.5 text-left">
+                <i class="fa-solid fa-bullhorn text-amber-400 text-lg flex-shrink-0"></i>
+                <div>
+                    <strong class="text-amber-300 block uppercase text-[10px] tracking-wider">Kewajiban Isyarat Suling (Aturan 34 P2TL):</strong>
+                    <span id="briefing-horn-text" class="text-[11px]">Wajib membunyikan 1 Tiup Pendek (●) saat mengubah haluan ke kanan!</span>
+                </div>
+            </div>
+
+            <!-- Area Hitung Mundur Aba-aba -->
+            <div id="countdown-box" class="hidden my-3 py-2 bg-sky-950/70 border border-sky-500/40 rounded-xl">
+                <span class="text-[10px] uppercase tracking-widest text-sky-300 block">Aba-aba Anjungan</span>
+                <div id="countdown-text" class="font-mono-tech text-2xl sm:text-3xl font-extrabold text-amber-400 animate-pulse">
+                    SIAP... 3
+                </div>
+            </div>
+
+            <div class="mt-4 flex justify-center">
+                <button id="btn-launch-mission" class="w-full sm:w-auto bg-emerald-500 hover:bg-emerald-400 active:scale-95 text-slate-950 font-extrabold text-xs sm:text-sm px-8 py-3 rounded-xl transition shadow-lg shadow-emerald-500/30 flex items-center justify-center gap-2">
+                    <i class="fa-solid fa-play"></i> SIAP & MULAI MISI (ABA-ABA START)
+                </button>
+            </div>
+        </div>
+
+        <!-- BAGIAN BAWAH: KONSOL KONTROL ANJUNGAN (ARPA RADAR, ECDIS, AIS, KEMUDI, TELEGRAPH) -->
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-2 sm:gap-2.5 w-full items-end">
+
+            <!-- PANEL KIRI: INTEGRATED NAVIGATION SYSTEM (ARPA RADAR, ECDIS & AIS) (5 Kolom) -->
+            <div class="lg:col-span-5 interactive-panel rounded-2xl p-2.5 sm:p-3 flex flex-col gap-2">
+                <!-- Header Multi-Function Display (MFD) -->
+                <div class="flex items-center justify-between border-b border-slate-800 pb-1">
+                    <div class="flex items-center gap-1.5">
+                        <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                        <span class="text-[10px] font-mono-tech uppercase text-sky-400 font-bold tracking-wider">INS: ARPA RADAR • ECDIS • AIS</span>
+                    </div>
+                    <div class="flex items-center gap-1">
+                        <button id="btn-range-down" class="bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-600 px-1.5 py-0.5 rounded text-[9px] font-mono-tech" title="Perkecil Skala Jarak Radar/ECDIS">-</button>
+                        <span id="nav-range-label" class="text-[9px] font-mono-tech text-emerald-300 bg-slate-950 px-1.5 py-0.5 rounded border border-slate-800">1.5 NM</span>
+                        <button id="btn-range-up" class="bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-600 px-1.5 py-0.5 rounded text-[9px] font-mono-tech" title="Perbesar Skala Jarak Radar/ECDIS">+</button>
+                        <span id="horn-badge" class="bg-slate-800 text-slate-400 border border-slate-700 px-1.5 py-0.5 rounded text-[9px] font-mono-tech ml-1" title="Status Isyarat Suling P2TL">SULING: BELUM</span>
+                    </div>
+                </div>
+
+                <!-- Layar Ganda Realistis: ARPA Radar (Kiri) + ECDIS Electronic Chart (Tengah) + AIS Target Inspector (Kanan) -->
+                <div class="grid grid-cols-12 gap-2 items-center">
+                    
+                    <!-- 1. Layar ARPA Radar Interaktif (Dapat Diklik) -->
+                    <div class="col-span-4 flex flex-col items-center">
+                        <div class="radar-container w-28 h-28 sm:w-32 sm:h-32 bg-slate-950 border-2 border-emerald-500/70 relative">
+                            <canvas id="radar-canvas" width="180" height="180" class="w-full h-full block"></canvas>
+                            <div class="absolute top-1 left-0 right-0 text-center text-[7px] font-mono-tech text-emerald-400/90 pointer-events-none">ARPA • H-UP</div>
+                        </div>
+                        <span class="text-[8px] font-mono-tech text-emerald-400/80 mt-0.5">Klik Target Radar</span>
+                    </div>
+
+                    <!-- 2. Layar ECDIS (Peta Laut Elektronik / S-57 Chart - Dapat Diklik) -->
+                    <div class="col-span-4 flex flex-col items-center">
+                        <div class="ecdis-container w-28 h-28 sm:w-32 sm:h-32 rounded-xl bg-[#071929] border-2 border-sky-500/70 relative">
+                            <canvas id="ecdis-canvas" width="180" height="180" class="w-full h-full block"></canvas>
+                            <div class="absolute top-1 left-1.5 text-[7px] font-mono-tech text-sky-300 bg-slate-950/75 px-1 rounded pointer-events-none">ECDIS N-UP</div>
+                            <div class="absolute bottom-1 right-1.5 text-[7px] font-mono-tech text-amber-300 bg-slate-950/75 px-1 rounded pointer-events-none">WGS-84</div>
+                        </div>
+                        <span class="text-[8px] font-mono-tech text-sky-400/80 mt-0.5">Klik Peta / Objek</span>
+                    </div>
+
+                    <!-- 3. Panel Detail AIS / Objek Terpilih + Tombol Suling P2TL -->
+                    <div class="col-span-4 flex flex-col justify-between gap-1 text-xs h-full">
+                        <!-- Kotak Data Target AIS / Radar / ECDIS Terpilih -->
+                        <div id="ais-inspector-box" class="bg-slate-950/95 border border-sky-500/40 rounded-lg p-1.5 font-mono-tech text-[9px] leading-tight">
+                            <div class="flex items-center justify-between text-sky-400 font-bold border-b border-slate-800 pb-0.5 mb-0.5">
+                                <span id="selected-obj-type"><i class="fa-solid fa-tower-broadcast mr-1"></i>AIS DATA</span>
+                                <span id="selected-obj-status" class="text-[8px] text-emerald-400">AKTIF</span>
+                            </div>
+                            <div id="selected-obj-name" class="text-white font-bold truncate">Klik objek di Radar/ECDIS</div>
+                            <div id="selected-obj-detail1" class="text-slate-300 truncate">MMSI: 525019840</div>
+                            <div id="selected-obj-detail2" class="text-amber-300 truncate">CPA: -- | BRG: --</div>
+                        </div>
+
+                        <!-- Tombol Isyarat Suling P2TL (Aturan 34 COLREGs) -->
+                        <div class="grid grid-cols-2 gap-1">
+                            <button onclick="triggerColregHorn(1)" id="btn-horn-1" class="bg-amber-600/30 hover:bg-amber-500/50 active:bg-amber-500 text-amber-200 active:text-slate-950 border border-amber-500/50 py-1 px-1 rounded text-[9px] font-mono-tech font-bold transition flex items-center justify-between" title="1 Tiup Pendek: Belok Kanan">
+                                <span>● Kanan</span><span>1x</span>
+                            </button>
+                            <button onclick="triggerColregHorn(2)" id="btn-horn-2" class="bg-amber-600/20 hover:bg-amber-500/40 active:bg-amber-500 text-amber-200 active:text-slate-950 border border-amber-500/40 py-1 px-1 rounded text-[9px] font-mono-tech font-bold transition flex items-center justify-between" title="2 Tiup Pendek: Belok Kiri">
+                                <span>●● Kiri</span><span>2x</span>
+                            </button>
+                            <button onclick="triggerColregHorn(3)" id="btn-horn-3" class="bg-rose-600/25 hover:bg-rose-500/40 active:bg-rose-500 text-rose-200 active:text-white border border-rose-500/40 py-1 px-1 rounded text-[9px] font-mono-tech font-bold transition flex items-center justify-between" title="3 Tiup Pendek: Mesin Mundur">
+                                <span>●●● Mdr</span><span>3x</span>
+                            </button>
+                            <button onclick="triggerColregHorn(5)" id="btn-horn-5" class="bg-sky-600/25 hover:bg-sky-500/40 active:bg-sky-500 text-sky-200 active:text-slate-950 border border-sky-500/40 py-1 px-1 rounded text-[9px] font-mono-tech font-bold transition flex items-center justify-between" title="5 Tiup Pendek: Peringatan">
+                                <span>●●●●●</span><span>5x</span>
+                            </button>
+                        </div>
+
+                        <button id="btn-lights" class="w-full bg-emerald-600/20 hover:bg-emerald-600/40 text-emerald-300 border border-emerald-500/40 py-0.5 px-1.5 rounded text-[9px] transition flex items-center justify-between">
+                            <span><i class="fa-solid fa-lightbulb mr-1"></i>Lampu P2TL:</span>
+                            <span id="lights-status" class="font-mono-tech font-bold">ON</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- PANEL TENGAH: RODA KEMUDI INTERAKTIF (TOUCH HELM WHEEL) & RUDDER INDICATOR (4 Kolom) -->
+            <div class="lg:col-span-4 interactive-panel rounded-2xl p-3 flex flex-col justify-between">
+                
+                <!-- Header Indikator Sudut Kemudi -->
+                <div class="flex items-center justify-between mb-1">
+                    <span class="px-2 py-0.5 rounded bg-rose-500/20 border border-rose-500/40 text-rose-400 font-mono-tech text-xs font-bold">◀ PORT (Kiri)</span>
+                    <div class="text-center">
+                        <span class="text-[10px] uppercase tracking-wider text-slate-400 block">Putar Setir Kemudi (Touch Helm)</span>
+                        <div class="font-mono-tech text-lg sm:text-xl font-extrabold" id="rudder-display">
+                            MIDSHIPS 0°
+                        </div>
+                    </div>
+                    <span class="px-2 py-0.5 rounded bg-emerald-500/20 border border-emerald-500/40 text-emerald-400 font-mono-tech text-xs font-bold">STBD (Kanan) ▶</span>
+                </div>
+
+                <!-- Area Roda Kemudi Sentuh (Interactive Ship's Wheel) & Indikator -->
+                <div class="flex items-center justify-around gap-3 my-1">
+                    
+                    <!-- Roda Kemudi Kapal SVG (Dapat Diputar dengan Sentuhan Jari di PID) -->
+                    <div id="helm-touch-area" class="touch-helm-zone relative w-36 h-36 sm:w-44 sm:h-44 flex items-center justify-center flex-shrink-0">
+                        <!-- Busur Derajat Kemudi di Belakang Roda -->
+                        <svg viewBox="0 0 200 200" class="w-full h-full absolute inset-0 pointer-events-none">
+                            <circle cx="100" cy="100" r="92" fill="rgba(15,23,42,0.75)" stroke="#334155" stroke-width="2" stroke-dasharray="4 4"/>
+                            <path d="M 25 100 A 75 75 0 0 1 100 25" fill="none" stroke="#ef4444" stroke-width="5" stroke-linecap="round" opacity="0.5"/>
+                            <path d="M 100 25 A 75 75 0 0 1 175 100" fill="none" stroke="#22c55e" stroke-width="5" stroke-linecap="round" opacity="0.5"/>
+                            <!-- Penanda Titik Tengah Atas (Top Dead Center) -->
+                            <polygon points="100,4 94,16 106,16" fill="#38bdf8"/>
+                        </svg>
+
+                        <!-- Grup Roda Kemudi Kayu Jati & Kuningan yang Berputar -->
+                        <svg id="wheel-svg" viewBox="0 0 200 200" class="w-full h-full drop-shadow-2xl">
+                            <defs>
+                                <radialGradient id="woodGrad" cx="50%" cy="50%" r="50%">
+                                    <stop offset="0%" stop-color="#b45309"/>
+                                    <stop offset="70%" stop-color="#78350f"/>
+                                    <stop offset="100%" stop-color="#451a03"/>
+                                </radialGradient>
+                                <radialGradient id="brassGrad" cx="50%" cy="50%" r="50%">
+                                    <stop offset="0%" stop-color="#fef08a"/>
+                                    <stop offset="60%" stop-color="#eab308"/>
+                                    <stop offset="100%" stop-color="#854d0e"/>
+                                </radialGradient>
+                            </defs>
+                            <!-- 8 Jari-Jari & Pegangan Luar (Spokes & Handles) -->
+                            <g stroke="url(#woodGrad)" stroke-width="8" stroke-linecap="round">
+                                <line x1="100" y1="12" x2="100" y2="188" stroke="#38bdf8" stroke-width="10"/> <!-- Spoke Utama (King Spoke Biru) -->
+                                <line x1="12" y1="100" x2="188" y2="100"/>
+                                <line x1="38" y1="38" x2="162" y2="162"/>
+                                <line x1="162" y1="38" x2="38" y2="162"/>
+                            </g>
+                            <!-- Ujung Pegangan Bulat -->
+                            <g fill="url(#woodGrad)" stroke="#451a03" stroke-width="1.5">
+                                <circle cx="100" cy="10" r="6" fill="#38bdf8"/>
+                                <circle cx="100" cy="190" r="5"/>
+                                <circle cx="10" cy="100" r="5"/>
+                                <circle cx="190" cy="100" r="5"/>
+                                <circle cx="36" cy="36" r="5"/>
+                                <circle cx="164" cy="164" r="5"/>
+                                <circle cx="164" cy="36" r="5"/>
+                                <circle cx="36" cy="164" r="5"/>
+                            </g>
+                            <!-- Lingkar Roda Kemudi Luar & Dalam -->
+                            <circle cx="100" cy="100" r="64" fill="none" stroke="url(#woodGrad)" stroke-width="14"/>
+                            <circle cx="100" cy="100" r="64" fill="none" stroke="#f59e0b" stroke-width="1.5" opacity="0.5"/>
+                            <!-- Poros Kuningan Tengah (Brass Hub) -->
+                            <circle cx="100" cy="100" r="22" fill="url(#brassGrad)" stroke="#451a03" stroke-width="3"/>
+                            <circle cx="100" cy="100" r="8" fill="#1e293b"/>
+                        </svg>
+                    </div>
+
+                    <!-- Kolom Kanan Kemudi: Indikator Daun Kemudi Aktual & Slider Cadangan -->
+                    <div class="flex-grow flex flex-col gap-2 max-w-xs">
+                        <div class="bg-slate-950/90 p-2.5 rounded-xl border border-slate-800">
+                            <div class="flex justify-between text-[10px] font-mono-tech text-slate-400 mb-1">
+                                <span>Respon Daun Kemudi (Actual):</span>
+                                <span id="rudder-actual-text" class="text-sky-400 font-bold">0.0°</span>
+                            </div>
+                            <!-- Bar Indikator Sudut Aktual -->
+                            <div class="w-full bg-slate-900 h-3.5 rounded-full overflow-hidden relative border border-slate-700">
+                                <div class="absolute left-1/2 top-0 bottom-0 w-0.5 bg-white z-10"></div>
+                                <div id="rudder-actual-bar" class="h-full bg-sky-400 transition-all duration-75" style="width: 0%; margin-left: 50%;"></div>
+                            </div>
+                            <div class="flex justify-between text-[9px] font-mono-tech text-slate-400 px-0.5 mt-1">
+                                <span>35°P</span><span>15°P</span><span>0°</span><span>15°S</span><span>35°S</span>
+                            </div>
+                        </div>
+
+                        <!-- Slider Geser Cepat -->
+                        <div class="flex flex-col">
+                            <input type="range" id="rudder-slider" class="rudder-slider" min="-35" max="35" step="1" value="0">
+                        </div>
+
+                        <!-- Tombol Perintah Cepat Kemudi (Ukuran Besar untuk Layar Sentuh PID) -->
+                        <div class="grid grid-cols-3 gap-1.5">
+                            <button onclick="setRudderOrder(-35)" class="bg-rose-950/80 hover:bg-rose-800 active:scale-95 text-rose-200 border border-rose-600/50 py-2 rounded-lg text-[10px] sm:text-xs font-mono-tech font-bold transition shadow">Hard Port</button>
+                            <button onclick="setRudderOrder(0)" class="bg-sky-950/90 hover:bg-sky-800 active:scale-95 text-white border border-sky-500/60 py-2 rounded-lg text-[10px] sm:text-xs font-mono-tech font-bold transition shadow">Midships 0°</button>
+                            <button onclick="setRudderOrder(35)" class="bg-emerald-950/80 hover:bg-emerald-800 active:scale-95 text-emerald-200 border border-emerald-600/50 py-2 rounded-lg text-[10px] sm:text-xs font-mono-tech font-bold transition shadow">Hard Stbd</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- PANEL KANAN: TUAS ENGINE ORDER TELEGRAPH / EOT ASLI (3 Kolom) -->
+            <div class="lg:col-span-3 interactive-panel rounded-2xl p-3 flex flex-col justify-between">
+                <div class="flex items-center justify-between border-b border-slate-800 pb-1.5 mb-2">
+                    <div>
+                        <span class="text-[10px] uppercase tracking-wider text-sky-400 font-bold block">Tuas Telegraph Mesin (EOT)</span>
+                        <span id="eot-status-text" class="font-mono-tech text-xs font-bold text-amber-400">STOP ENGINE</span>
+                    </div>
+                    <div class="text-right font-mono-tech bg-slate-950 px-2.5 py-1 rounded-lg border border-slate-800">
+                        <span class="text-[9px] text-slate-400 block">PROPELLER</span>
+                        <span id="hud-rpm" class="text-sm font-bold text-white">0</span> <span class="text-[10px] text-slate-400">RPM</span>
+                    </div>
+                </div>
+
+                <!-- Konsol Tuas Dorong Mekanis (Kiri) + Indikator Tingkat Kecepatan (Kanan) -->
+                <div class="flex items-stretch gap-3 h-44 sm:h-48 px-1">
+                    
+                    <!-- Jalur Tuas Dorong (Vertical Lever Track untuk PID Touchscreen) -->
+                    <div id="eot-lever-track" class="eot-lever-track w-16 sm:w-20 rounded-xl flex flex-col justify-between py-3 px-2 relative flex-shrink-0">
+                        <!-- Garis Takik (Detent Notches) -->
+                        <div class="w-full border-b-2 border-emerald-400/50"></div>
+                        <div class="w-full border-b border-slate-500/50"></div>
+                        <div class="w-full border-b border-slate-500/50"></div>
+                        <div class="w-full border-b border-slate-500/50"></div>
+                        <div class="w-full border-b-2 border-amber-400/80"></div>
+                        <div class="w-full border-b border-slate-500/50"></div>
+                        <div class="w-full border-b-2 border-rose-500/60"></div>
+
+                        <!-- Batang Besi Poros Tengah -->
+                        <div class="absolute top-2 bottom-2 left-1/2 -translate-x-1/2 w-2 bg-slate-950 rounded-full border border-slate-700 pointer-events-none"></div>
+
+                        <!-- Kepala Tuas Throttle (Handle yang bisa di-drag naik/turun) -->
+                        <div id="eot-lever-handle" class="eot-lever-handle" style="top: 66.6%;">
+                            <div class="w-8 h-1.5 rounded-full bg-amber-400 shadow" id="eot-handle-led"></div>
+                        </div>
+                    </div>
+
+                    <!-- Daftar Posisi Order Mesin (Bisa disentuh langsung atau mengikuti Tuas) -->
+                    <div class="flex-grow flex flex-col justify-between font-mono-tech text-[10px] sm:text-[11px]">
+                        <button onclick="setEngineOrder(4)" id="eot-4" class="eot-btn bg-slate-900/90 hover:bg-slate-800 text-emerald-400 border border-slate-700/80 h-6 px-2.5 rounded flex justify-between items-center">
+                            <span>▲ FULL AHEAD</span><span class="text-[9px] opacity-75">100%</span>
+                        </button>
+                        <button onclick="setEngineOrder(3)" id="eot-3" class="eot-btn bg-slate-900/90 hover:bg-slate-800 text-emerald-300 border border-slate-700/80 h-6 px-2.5 rounded flex justify-between items-center">
+                            <span>▲ HALF AHEAD</span><span class="text-[9px] opacity-75">65%</span>
+                        </button>
+                        <button onclick="setEngineOrder(2)" id="eot-2" class="eot-btn bg-slate-900/90 hover:bg-slate-800 text-emerald-200 border border-slate-700/80 h-6 px-2.5 rounded flex justify-between items-center">
+                            <span>▲ SLOW AHEAD</span><span class="text-[9px] opacity-75">35%</span>
+                        </button>
+                        <button onclick="setEngineOrder(1)" id="eot-1" class="eot-btn bg-slate-900/90 hover:bg-slate-800 text-teal-200 border border-slate-700/80 h-6 px-2.5 rounded flex justify-between items-center">
+                            <span>▲ DEAD SLOW</span><span class="text-[9px] opacity-75">15%</span>
+                        </button>
+                        <button onclick="setEngineOrder(0)" id="eot-0" class="eot-btn active-stop bg-slate-900/90 hover:bg-slate-800 text-amber-300 border border-slate-700/80 h-6 px-2.5 rounded flex justify-between items-center">
+                            <span>■ STOP ENGINE</span><span class="text-[9px] opacity-90">0%</span>
+                        </button>
+                        <button onclick="setEngineOrder(-1)" id="eot--1" class="eot-btn bg-slate-900/90 hover:bg-slate-800 text-rose-300 border border-slate-700/80 h-6 px-2.5 rounded flex justify-between items-center">
+                            <span>▼ SLOW ASTERN</span><span class="text-[9px] opacity-75">-35%</span>
+                        </button>
+                        <button onclick="setEngineOrder(-2)" id="eot--2" class="eot-btn bg-slate-900/90 hover:bg-slate-800 text-rose-400 border border-slate-700/80 h-6 px-2.5 rounded flex justify-between items-center">
+                            <span>▼ FULL ASTERN</span><span class="text-[9px] opacity-75">-80%</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <!-- MODAL MODUL PEMBELAJARAN & PANDUAN PRAKTIK SMK NAUTIKA -->
+    <div id="modal-panduan" class="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4">
+        <div class="interactive-panel rounded-2xl max-w-3xl w-full max-h-[88vh] flex flex-col overflow-hidden border border-sky-500/40 shadow-2xl">
+            <!-- Header Modal -->
+            <div class="bg-slate-900/90 px-6 py-4 border-b border-slate-800 flex items-center justify-between">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-xl bg-sky-500/20 border border-sky-500/40 flex items-center justify-center text-sky-400 text-xl">
+                        <i class="fa-solid fa-compass"></i>
+                    </div>
+                    <div>
+                        <h2 class="text-base sm:text-lg font-bold text-white">Modul Praktik Anjungan Kapal (Bridge Simulator)</h2>
+                        <p class="text-xs text-sky-400">Kompetensi Keahlian: Nautika Kapal Niaga (NKN) & Nautika Kapal Penangkap Ikan (NKPI)</p>
+                    </div>
+                </div>
+                <button id="close-panduan" class="text-slate-400 hover:text-white text-xl px-2">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+
+            <!-- Isi Materi -->
+            <div class="p-6 overflow-y-auto space-y-5 text-xs sm:text-sm text-slate-300 leading-relaxed">
+                
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div class="bg-slate-900/80 p-4 rounded-xl border border-slate-800">
+                        <h3 class="font-bold text-sky-400 mb-2 flex items-center gap-2">
+                            <i class="fa-solid fa-Traffic-light text-rose-400"></i> 1. Sistem Pelampung IALA & Sisi Kapal
+                        </h3>
+                        <ul class="space-y-1.5 text-xs list-disc list-inside text-slate-300">
+                            <li><strong class="text-rose-400">PORT (Kiri):</strong> Ditandai warna <strong>Merah</strong>. Memiliki lampu navigasi lambung kiri berwarna merah.</li>
+                            <li><strong class="text-emerald-400">STARBOARD (Kanan):</strong> Ditandai warna <strong>Hijau</strong>. Memiliki lampu navigasi lambung kanan berwarna hijau.</li>
+                            <li>Saat memasuki alur pelayaran dari laut lepas (IALA Region A), posisikan pelampung <strong>Merah di sisi Kiri</strong> dan <strong>Hijau di sisi Kanan</strong> kapal.</li>
+                        </ul>
+                    </div>
+
+                    <div class="bg-slate-900/80 p-4 rounded-xl border border-slate-800">
+                        <h3 class="font-bold text-amber-400 mb-2 flex items-center gap-2">
+                            <i class="fa-solid fa-scale-balanced"></i> 2. Aturan P2TL & Isyarat Suling (Aturan 34)
+                        </h3>
+                        <ul class="space-y-1.5 text-xs list-disc list-inside text-slate-300">
+                            <li><strong>Aturan 14 (Head-on / Berhadapan):</strong> Wajib merubah haluan ke <strong>KANAN (Starboard)</strong> dan membunyikan <strong>1 tiup pendek (●)</strong>.</li>
+                            <li><strong>Aturan 15 (Crossing / Bersilangan):</strong> Kapal yang melihat kapal lain di lambung kanannya wajib memberi jalan ke kanan + <strong>1 tiup pendek (●)</strong>.</li>
+                            <li><strong>Aturan 34 (Isyarat Olah Gerak):</strong> <strong>● (1x)</strong> = Belok Kanan, <strong>●● (2x)</strong> = Belok Kiri, <strong>●●● (3x)</strong> = Mesin Mundur, <strong>●●●●● (5x)</strong> = Ragu/Peringatan Bahaya.</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <div class="bg-slate-900/80 p-4 rounded-xl border border-slate-800">
+                    <h3 class="font-bold text-emerald-400 mb-2 flex items-center gap-2">
+                        <i class="fa-solid fa-gears"></i> 3. Karakteristik Olah Gerak Kapal (Inersia & Pivot Point)
+                    </h3>
+                    <p class="text-xs text-slate-300 mb-2">
+                        Berbeda dengan kendaraan darat, kapal memiliki <strong>massa dan inersia yang besar</strong> di atas air:
+                    </p>
+                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+                        <div class="bg-slate-950 p-2.5 rounded-lg border border-slate-800/80">
+                            <strong class="text-white block mb-1">Respon Mesin (EOT)</strong>
+                            Perubahan dari <em>Stop</em> ke <em>Full Ahead</em> membutuhkan waktu hingga baling-baling (RPM) mendorong badan kapal mencapai kecepatan penuh.
+                        </div>
+                        <div class="bg-slate-950 p-2.5 rounded-lg border border-slate-800/80">
+                            <strong class="text-white block mb-1">Respon Kemudi (Helm)</strong>
+                            Saat roda kemudi diputar ke <em>Hard Stbd (35°)</em>, daun kemudi bergerak bertahap. Kapal hanya bisa berbelok efektif jika memiliki aliran air/laju.
+                        </div>
+                        <div class="bg-slate-950 p-2.5 rounded-lg border border-slate-800/80">
+                            <strong class="text-white block mb-1">Stopping Distance</strong>
+                            Kapal tidak memiliki rem. Untuk menghentikan laju kapal saat sandar, gunakan perintah <strong>Slow/Full Astern (Mesin Mundur)</strong> jauh sebelum titik henti.
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bg-sky-950/40 p-4 rounded-xl border border-sky-800/60">
+                    <h3 class="font-bold text-white mb-2 text-xs uppercase tracking-wider">Kontrol Cepat Keyboard & Layar Sentuh:</h3>
+                    <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs font-mono-tech">
+                        <div><span class="bg-slate-800 px-1.5 py-0.5 rounded text-sky-300">W / S</span> : Naik/Turun EOT</div>
+                        <div><span class="bg-slate-800 px-1.5 py-0.5 rounded text-sky-300">A / D</span> : Kemudi Kiri/Kanan</div>
+                        <div><span class="bg-slate-800 px-1.5 py-0.5 rounded text-sky-300">C</span> : Midships (0°)</div>
+                        <div><span class="bg-slate-800 px-1.5 py-0.5 rounded text-sky-300">Spasi</span> : Suling Kapal</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Footer Modal -->
+            <div class="bg-slate-900/90 px-6 py-3 border-t border-slate-800 flex justify-end">
+                <button id="start-sim-btn" class="bg-sky-500 hover:bg-sky-400 text-slate-950 font-bold px-6 py-2 rounded-xl text-xs sm:text-sm transition shadow-lg shadow-sky-500/20">
+                    Mulai Praktik Berlayar <i class="fa-solid fa-arrow-right ml-1"></i>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        /**
+         * ============================================================================
+         * SMK NAUTIKA (NKN & NKPI) 3D BRIDGE SIMULATOR
+         * Mencakup: Fisika Hidrodinamika Kapal, ARPA Radar, P2TL/COLREGs, & Skenario
+         * ============================================================================
+         */
+
+        // --- STATE SIMULASI & FISIKA KAPAL ---
+        const simState = {
+            // Posisi & Orientasi Kapal Sendiri (Own Ship: KM AA 8480) dalam meter
+            x: 0,
+            z: 0,
+            heading: 0,          // Derajat (000 = Utara / -Z, 090 = Timur / +X, 180 = Selatan / +Z, 270 = Barat / -X)
+            rot: 0,              // Rate of Turn (Derajat per menit)
+            speedKnots: 0,       // Kecepatan aktual dalam Knots
+            targetSpeedKnots: 0, // Target kecepatan berdasarkan EOT
+            rpm: 0,
+            targetRpm: 0,
+            eotOrder: 0,         // -2: Full Astern, -1: Slow Astern, 0: Stop, 1: Dead Slow, 2: Slow, 3: Half, 4: Full Ahead
+            rudderOrder: 0,      // Perintah sudut kemudi (-35 s.d. +35 derajat)
+            rudderActual: 0,     // Sudut daun kemudi aktual
+            
+            // Konfigurasi Kapal Penumpang Besar PELNI (KM AA 8480)
+            vesselType: 'NKN',   // 'NKN' = KM AA 8480 Kapal Penumpang PELNI
+            maxSpeed: 20.0,      // Kecepatan maksimum dalam Knots
+            inertiaFactor: 0.0085,
+            turnEfficiency: 0.030,
+
+            // Lingkungan, Cuaca & Gelombang Laut
+            isNight: false,
+            weatherMode: 'CLEAR', // 'CLEAR' (Cerah), 'FOG' (Kabut Tebal), 'STORM' (Hujan Badai)
+            waveLevel: 1,         // 0: Teduh (Calm), 1: Tenang (Moderate), 2: Bergelombang (Rough), 3: Ombak Besar (High Seas)
+            waveAmplitude: 0.35,  // Tinggi gelombang meter
+            waveFrequency: 1.6,   // Kecepatan alun gelombang
+            navLightsOn: true,
+            engineSoundEnabled: true, // Status suara mesin diesel kapal
+            cameraMode: 'DRONE', // Default langsung menampilkan View Drone Atas yang memperlihatkan seluruh badan kapal
+            camYawOffset: 0,
+            camPitchOffset: -0.02,
+            camDistance: 95,
+            droneHeight: 165,
+            shakeIntensity: 0,
+            collisionCooldown: 0,
+            lastWarningTime: 0,
+
+            // Skenario Aktif & Sistem Progresi Misi P2TL (COLREGs 1972)
+            currentScenario: 1,
+            maxUnlockedScenario: 8,
+            totalScenarios: 8,
+            completedScenarios: {},
+            missionStarted: false,
+            isCountingDown: false,
+            missionCompleted: false,
+            missionFailed: false,
+            hornSoundedInMission: false,
+            hornCounts: { 1: 0, 2: 0, 3: 0, 5: 0 },
+            requiredHornCode: 1,
+            requiredHornDesc: "Wajib bunyikan 1 Tiup Pendek (● Kanan) saat mengubah haluan ke kanan!",
+            goalPos: { x: 0, z: -650, radius: 45, requireStop: false },
+            navRangeMeters: 650,
+            selectedTarget: null,
+            clickableRadarObjects: [],
+            clickableEcdisObjects: [],
+            shipTrackHistory: [{ x: 0, z: 0 }],
+            buoys: [],
+            aiShips: [],
+            fishSchools: [],
+            islands: [],
+            portStructures: []
+        };
+
+        // Tabel Konfigurasi Engine Order Telegraph (EOT) & Perintah Suara Anjungan
+        const EOT_TABLE = {
+            '4':  { name: 'FULL AHEAD',  voiceId: 'Mesin maju penuh, Full Ahead!',     speedRatio: 1.00, rpm: 120, style: 'active',        leverPct: 6 },
+            '3':  { name: 'HALF AHEAD',  voiceId: 'Mesin maju setengah, Half Ahead!',  speedRatio: 0.65, rpm: 85,  style: 'active',        leverPct: 21 },
+            '2':  { name: 'SLOW AHEAD',  voiceId: 'Mesin maju pelan, Slow Ahead!',     speedRatio: 0.38, rpm: 50,  style: 'active',        leverPct: 36 },
+            '1':  { name: 'DEAD SLOW',   voiceId: 'Maju sangat pelan, Dead Slow Ahead!', speedRatio: 0.18, rpm: 25,  style: 'active',      leverPct: 51 },
+            '0':  { name: 'STOP ENGINE', voiceId: 'Stop mesin!',                       speedRatio: 0.00, rpm: 0,   style: 'active-stop',   leverPct: 66.5 },
+            '-1': { name: 'SLOW ASTERN', voiceId: 'Mesin mundur pelan, Slow Astern!',  speedRatio: -0.35, rpm: -45, style: 'active-astern', leverPct: 81.5 },
+            '-2': { name: 'FULL ASTERN', voiceId: 'Mesin mundur penuh, Full Astern!',  speedRatio: -0.75, rpm: -95, style: 'active-astern', leverPct: 94 }
+        };
+
+        const EOT_LEVELS_DESC = [4, 3, 2, 1, 0, -1, -2];
+
+        // --- SISTEM AUDIO MARITIM, BUNYI MESIN DIESEL, ALARM & VOICE ORDER ---
+        let audioInitialized = false;
+        let hornSynth = null;
+        let bellSynth = null;
+        let alarmSynth = null;
+        let crashNoise = null;
+        let engineOsc = null;
+        let engineSubOsc = null;
+        let engineLfo = null;
+        let engineGain = null;
+        let engineFilter = null;
+        let propWashNoise = null;
+        let propWashGain = null;
+
+        function initAudio() {
+            if (audioInitialized) return;
+            try {
+                Tone.start();
+                // Suling Kapal
+                hornSynth = new Tone.PolySynth(Tone.Synth, {
+                    oscillator: { type: "sawtooth" },
+                    envelope: { attack: 0.15, decay: 0.2, sustain: 0.9, release: 0.6 }
+                }).toDestination();
+                hornSynth.volume.value = -8;
+
+                // Bel Telegraph Anjungan
+                bellSynth = new Tone.MetalSynth({
+                    frequency: 450,
+                    envelope: { attack: 0.001, decay: 0.25, release: 0.1 },
+                    harmonicity: 5.1,
+                    modulationIndex: 16,
+                    resonance: 3000,
+                    octaves: 0.5
+                }).toDestination();
+                bellSynth.volume.value = -14;
+
+                // Alarm Peringatan Bahaya Tubrukan
+                alarmSynth = new Tone.Synth({
+                    oscillator: { type: "square" },
+                    envelope: { attack: 0.01, decay: 0.15, sustain: 0.2, release: 0.1 }
+                }).toDestination();
+                alarmSynth.volume.value = -12;
+
+                // Suara Benturan Baja Kapal
+                crashNoise = new Tone.NoiseSynth({
+                    noise: { type: "brown" },
+                    envelope: { attack: 0.005, decay: 0.9, sustain: 0.1, release: 0.8 }
+                }).toDestination();
+                crashNoise.volume.value = -2;
+
+                // Suara Mesin Diesel Kapal & Baling-Baling (Aktif saat kapal berjalan)
+                engineFilter = new Tone.Filter(120, "lowpass").toDestination();
+                engineGain = new Tone.Gain(0).connect(engineFilter);
+
+                engineOsc = new Tone.Oscillator(34, "sawtooth").connect(engineGain);
+                engineSubOsc = new Tone.Oscillator(17, "triangle").connect(engineGain);
+
+                engineLfo = new Tone.LFO(4, 75, 165).connect(engineFilter.frequency);
+                engineOsc.start();
+                engineSubOsc.start();
+                engineLfo.start();
+
+                propWashGain = new Tone.Gain(0).toDestination();
+                const washFilter = new Tone.Filter(260, "lowpass").connect(propWashGain);
+                propWashNoise = new Tone.Noise("brown").connect(washFilter);
+                propWashNoise.start();
+
+                audioInitialized = true;
+            } catch (e) {
+                console.warn("Audio belum diizinkan oleh browser:", e);
+            }
+        }
+
+        function updateShipEngineSound() {
+            if (!audioInitialized || !engineGain || !engineOsc) return;
+
+            const absRpm = Math.abs(simState.rpm);
+            const absSpeed = Math.abs(simState.speedKnots);
+            const isRunning = simState.engineSoundEnabled && (absRpm > 1.5 || absSpeed > 0.2);
+
+            if (!isRunning) {
+                engineGain.gain.rampTo(0, 0.25);
+                if (propWashGain) propWashGain.gain.rampTo(0, 0.25);
+                return;
+            }
+
+            const powerRatio = Math.min(1, Math.max(absRpm / 120, absSpeed / simState.maxSpeed));
+            const baseFreq = 26 + powerRatio * 42;
+            engineOsc.frequency.rampTo(baseFreq, 0.15);
+            engineSubOsc.frequency.rampTo(baseFreq * 0.5, 0.15);
+            engineLfo.frequency.rampTo(3.2 + powerRatio * 9.5, 0.15);
+
+            const targetVol = 0.06 + powerRatio * 0.18;
+            engineGain.gain.rampTo(targetVol, 0.2);
+
+            if (propWashGain) {
+                propWashGain.gain.rampTo(0.02 + (absSpeed / simState.maxSpeed) * 0.12, 0.2);
+            }
+        }
+
+        function playTelegraphBell(order = 0) {
+            initAudio();
+            if (bellSynth) {
+                const note = order > 0 ? "E6" : (order < 0 ? "G5" : "C6");
+                bellSynth.triggerAttackRelease(note, "16n");
+            }
+        }
+
+        function speakTelegraphOrder(text) {
+            if (!('speechSynthesis' in window)) return;
+            try {
+                window.speechSynthesis.cancel();
+                const utter = new SpeechSynthesisUtterance(text);
+                utter.lang = 'id-ID';
+                utter.rate = 1.08;
+                utter.pitch = 0.95;
+                window.speechSynthesis.speak(utter);
+            } catch (e) {
+                console.warn("Speech synthesis error:", e);
+            }
+        }
+
+        function playProximityAlarmSound() {
+            initAudio();
+            if (alarmSynth) {
+                alarmSynth.triggerAttackRelease("A5", "16n");
+            }
+        }
+
+        function triggerCollisionImpactEffect() {
+            initAudio();
+            if (crashNoise) {
+                crashNoise.triggerAttackRelease("0.8");
+            }
+            if (bellSynth) {
+                bellSynth.triggerAttackRelease("C4", "4n");
+            }
+            simState.shakeIntensity = 2.8;
+            const overlay = document.getElementById('damage-overlay');
+            if (overlay) {
+                overlay.style.opacity = '1';
+                setTimeout(() => { overlay.style.opacity = '0'; }, 650);
+            }
+        }
+
+        function playShipHorn(duration = "0.8") {
+            initAudio();
+            if (hornSynth) {
+                hornSynth.triggerAttackRelease(["C2", "G2", "C3"], duration);
+            }
+        }
+
+        function triggerColregHorn(blasts = 1) {
+            initAudio();
+            simState.hornSoundedInMission = true;
+            simState.hornCounts[blasts] = (simState.hornCounts[blasts] || 0) + 1;
+
+            const blastDur = blasts === 5 ? 0.22 : 0.42;
+            const gapMs = blasts === 5 ? 280 : 560;
+            for (let i = 0; i < blasts; i++) {
+                setTimeout(() => {
+                    playShipHorn(blastDur.toString());
+                }, i * gapMs);
+            }
+
+            const badge = document.getElementById('horn-badge');
+            if (badge) {
+                const symbols = '●'.repeat(blasts);
+                badge.textContent = `SULING: ${symbols} (${blasts}x)`;
+                badge.className = "bg-emerald-500/20 text-emerald-300 border border-emerald-500/50 px-1.5 py-0.5 rounded text-[9px] font-mono-tech font-bold";
+            }
+
+            const hornMeaning = {
+                1: "Satu tiup pendek, kapal merubah haluan ke kanan!",
+                2: "Dua tiup pendek, kapal merubah haluan ke kiri!",
+                3: "Tiga tiup pendek, mesin kapal bergerak mundur!",
+                5: "Lima tiup pendek, isyarat peringatan bahaya!"
+            };
+            if (hornMeaning[blasts]) {
+                setTimeout(() => speakTelegraphOrder(hornMeaning[blasts]), blasts * gapMs + 100);
+            }
+        }
+
+        // --- INISIALISASI THREE.JS ---
+        let scene, camera, renderer, clock;
+        let ownShipGroup, nknBowGroup, nkpiBowGroup, bargeGroup, towRopeMesh, ownShipLightsGroup;
+        let waterMesh, waterGeometry, skyLights = {};
+        let scenarioGroup;
+        let shipWakeParticles = [], smokeParticles = [], radarScanners = [];
+        let rainSystem = null;
+
+        function initThreeJS() {
+            const container = document.getElementById('canvas-container');
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x7dd3fc);
+            scene.fog = new THREE.FogExp2(0x7dd3fc, 0.00065);
+
+            camera = new THREE.PerspectiveCamera(58, window.innerWidth / window.innerHeight, 0.5, 4000);
+            
+            renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+            renderer.toneMapping = THREE.ACESFilmicToneMapping;
+            renderer.toneMappingExposure = 1.05;
+            container.appendChild(renderer.domElement);
+
+            clock = new THREE.Clock();
+
+            skyLights.hemi = new THREE.HemisphereLight(0xe0f2fe, 0x0c4a6e, 0.65);
+            scene.add(skyLights.hemi);
+
+            skyLights.ambient = new THREE.AmbientLight(0xdbeafe, 0.35);
+            scene.add(skyLights.ambient);
+
+            skyLights.sun = new THREE.DirectionalLight(0xfffbeb, 1.35);
+            skyLights.sun.position.set(250, 420, 180);
+            skyLights.sun.castShadow = true;
+            skyLights.sun.shadow.mapSize.width = 2048;
+            skyLights.sun.shadow.mapSize.height = 2048;
+            skyLights.sun.shadow.camera.near = 50;
+            skyLights.sun.shadow.camera.far = 1200;
+            const d = 180;
+            skyLights.sun.shadow.camera.left = -d;
+            skyLights.sun.shadow.camera.right = d;
+            skyLights.sun.shadow.camera.top = d;
+            skyLights.sun.shadow.camera.bottom = -d;
+            scene.add(skyLights.sun);
+
+            waterGeometry = new THREE.PlaneGeometry(6000, 6000, 110, 110);
+            const waterMat = new THREE.MeshStandardMaterial({
+                color: 0x035388,
+                roughness: 0.22,
+                metalness: 0.65,
+                flatShading: false
+            });
+            waterMesh = new THREE.Mesh(waterGeometry, waterMat);
+            waterMesh.rotation.x = -Math.PI / 2;
+            waterMesh.receiveShadow = true;
+            scene.add(waterMesh);
+
+            const gridHelper = new THREE.GridHelper(6000, 240, 0x38bdf8, 0x0284c7);
+            gridHelper.position.y = 0.05;
+            gridHelper.material.opacity = 0.14;
+            gridHelper.material.transparent = true;
+            scene.add(gridHelper);
+
+            scenarioGroup = new THREE.Group();
+            scene.add(scenarioGroup);
+
+            buildOwnShip();
+            initWakeAndSmokeEffects();
+            initRainWeatherSystem();
+
+            loadScenario(1);
+
+            window.addEventListener('resize', onWindowResize);
+            setupCameraControls(renderer.domElement);
+        }
+
+        function createShipNamePlateTexture(textStr, bgColor = '#ffffff', textColor = '#0284c7', subText = '') {
+            const canvas = document.createElement('canvas');
+            canvas.width = 1024;
+            canvas.height = 256;
+            const ctx = canvas.getContext('2d');
+
+            ctx.fillStyle = bgColor;
+            ctx.fillRect(0, 0, 1024, 256);
+
+            ctx.strokeStyle = '#0284c7';
+            ctx.lineWidth = 14;
+            ctx.strokeRect(10, 10, 1004, 236);
+
+            ctx.shadowColor = 'rgba(2, 132, 199, 0.25)';
+            ctx.shadowBlur = 6;
+            ctx.shadowOffsetX = 2;
+            ctx.shadowOffsetY = 2;
+
+            ctx.fillStyle = textColor;
+            ctx.font = '900 134px "JetBrains Mono", "Inter", sans-serif';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(textStr, 512, subText ? 108 : 132);
+
+            if (subText) {
+                ctx.font = 'bold 44px "Inter", sans-serif';
+                ctx.fillStyle = '#0369a1';
+                ctx.fillText(subText, 512, 202);
+            }
+
+            const tex = new THREE.CanvasTexture(canvas);
+            tex.anisotropy = 4;
+            return tex;
+        }
+
+        function createBridgeWindowTexture() {
+            const canvas = document.createElement('canvas');
+            canvas.width = 512;
+            canvas.height = 128;
+            const ctx = canvas.getContext('2d');
+            ctx.fillStyle = '#f8fafc';
+            ctx.fillRect(0, 0, 512, 128);
+
+            ctx.fillStyle = '#090d16';
+            ctx.fillRect(8, 22, 496, 64);
+
+            for (let x = 16; x < 490; x += 38) {
+                ctx.fillStyle = '#0c4a6e';
+                ctx.fillRect(x, 28, 30, 52);
+                ctx.fillStyle = '#38bdf8';
+                ctx.fillRect(x + 3, 31, 24, 16);
+            }
+            return new THREE.CanvasTexture(canvas);
+        }
+
+        function createPassengerDeckTexture() {
+            const canvas = document.createElement('canvas');
+            canvas.width = 512;
+            canvas.height = 128;
+            const ctx = canvas.getContext('2d');
+            ctx.fillStyle = '#f8fafc';
+            ctx.fillRect(0, 0, 512, 128);
+
+            ctx.fillStyle = '#cbd5e1';
+            ctx.fillRect(0, 112, 512, 16);
+
+            for (let x = 14; x < 498; x += 24) {
+                ctx.fillStyle = '#0f172a';
+                ctx.fillRect(x, 36, 14, 42);
+                ctx.fillStyle = '#38bdf8';
+                ctx.fillRect(x + 2, 38, 10, 14);
+            }
+            const tex = new THREE.CanvasTexture(canvas);
+            tex.wrapS = THREE.RepeatWrapping;
+            tex.wrapT = THREE.RepeatWrapping;
+            return tex;
+        }
+
+        function createLoftedHullGeometry(length, halfWidth, height, flare = 1.2) {
+            const zSegs = 28;
+            const ySegs = 8;
+
+            function getBeamFactor(t) {
+                if (t < 0.15) {
+                    return 0.72 + 0.28 * Math.sin((t / 0.15) * (Math.PI / 2));
+                } else if (t < 0.68) {
+                    return 1.0;
+                } else {
+                    const u = (t - 0.68) / 0.32;
+                    return Math.cos(u * (Math.PI / 2));
+                }
+            }
+
+            const vertices = [];
+            const indices = [];
+
+            for (let iz = 0; iz <= zSegs; iz++) {
+                const t = iz / zSegs;
+                const z = (0.5 - t) * length;
+                const beam = getBeamFactor(t) * halfWidth;
+                const sheer = (t > 0.75 ? Math.pow((t - 0.75) / 0.25, 2) * 1.8 : 0) + (t < 0.15 ? Math.pow((0.15 - t) / 0.15, 2) * 0.6 : 0);
+
+                for (let iy = 0; iy <= ySegs; iy++) {
+                    const v = iy / ySegs;
+                    const flareEffect = (t > 0.65) ? Math.pow(v, 1.8) * ((t - 0.65) / 0.35) * flare : 0;
+                    const sectionProfile = Math.pow(v, 0.42);
+                    const x = (beam * sectionProfile) + flareEffect;
+                    const y = (v * height) + (v * sheer) - 1.2;
+
+                    vertices.push(x, y, z);
+                    vertices.push(-x, y, z);
+                }
+            }
+
+            const stride = (ySegs + 1) * 2;
+            for (let iz = 0; iz < zSegs; iz++) {
+                for (let iy = 0; iy < ySegs; iy++) {
+                    const r0 = iz * stride + iy * 2;
+                    const r1 = (iz + 1) * stride + iy * 2;
+                    const r2 = (iz + 1) * stride + (iy + 1) * 2;
+                    const r3 = iz * stride + (iy + 1) * 2;
+
+                    indices.push(r0, r1, r2);
+                    indices.push(r0, r2, r3);
+
+                    const l0 = r0 + 1, l1 = r1 + 1, l2 = r2 + 1, l3 = r3 + 1;
+                    indices.push(l0, l2, l1);
+                    indices.push(l0, l3, l2);
+                }
+            }
+
+            const hullGeo = new THREE.BufferGeometry();
+            hullGeo.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
+            hullGeo.setIndex(indices);
+            hullGeo.computeVertexNormals();
+            return hullGeo;
+        }
+
+        function buildOwnShip() {
+            ownShipGroup = new THREE.Group();
+            scene.add(ownShipGroup);
+            radarScanners = [];
+
+            const matHullWhite = new THREE.MeshStandardMaterial({ color: 0xf8fafc, roughness: 0.28, metalness: 0.15, side: THREE.DoubleSide });
+            const matPelniRed = new THREE.MeshStandardMaterial({ color: 0xea580c, roughness: 0.35, metalness: 0.2, side: THREE.DoubleSide });
+            const matPelniYellow = new THREE.MeshStandardMaterial({ color: 0xfacc15, roughness: 0.35, metalness: 0.2, side: THREE.DoubleSide });
+            const matBootRed = new THREE.MeshStandardMaterial({ color: 0x881337, roughness: 0.6, metalness: 0.2, side: THREE.DoubleSide });
+            const matDeckTeak = new THREE.MeshStandardMaterial({ color: 0x0f766e, roughness: 0.65, metalness: 0.15 });
+            const matDeckFore = new THREE.MeshStandardMaterial({ color: 0x15803d, roughness: 0.6, metalness: 0.2 });
+            const matSteelDark = new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.5, metalness: 0.6 });
+            const matLifeboatOrange = new THREE.MeshStandardMaterial({ color: 0xf97316, roughness: 0.3, metalness: 0.2 });
+            const matWindowBridge = new THREE.MeshStandardMaterial({ map: createBridgeWindowTexture(), roughness: 0.18, metalness: 0.55 });
+            const matCabinDeck = new THREE.MeshStandardMaterial({ map: createPassengerDeckTexture(), roughness: 0.3, metalness: 0.15 });
+            const matNamePlate = new THREE.MeshBasicMaterial({
+                map: createShipNamePlateTexture('KM AA 8480', '#ffffff', '#0284c7'),
+                side: THREE.DoubleSide
+            });
+            const matHullBanner = new THREE.MeshBasicMaterial({
+                map: createShipNamePlateTexture('KM AA 8480', '#ffffff', '#0284c7', 'PELNI PASSENGER LINE'),
+                side: THREE.DoubleSide
+            });
+
+            nknBowGroup = new THREE.Group();
+
+            const lowerHullGeo = createLoftedHullGeometry(86, 7.6, 2.4, 0.8);
+            const lowerHull = new THREE.Mesh(lowerHullGeo, matBootRed);
+            lowerHull.position.set(0, 0.2, 0);
+            nknBowGroup.add(lowerHull);
+
+            const bulbBow = new THREE.Mesh(new THREE.SphereGeometry(2.1, 16, 12), matBootRed);
+            bulbBow.scale.set(0.75, 0.85, 2.6);
+            bulbBow.position.set(0, 0.3, -43.0);
+            nknBowGroup.add(bulbBow);
+
+            const mainHullGeo = createLoftedHullGeometry(88, 7.8, 6.2, 1.85);
+            const mainHull = new THREE.Mesh(mainHullGeo, matHullWhite);
+            mainHull.position.set(0, 1.4, 0);
+            mainHull.castShadow = true;
+            mainHull.receiveShadow = true;
+            nknBowGroup.add(mainHull);
+
+            const pelniBandRedGeo = createLoftedHullGeometry(88.3, 7.88, 1.15, 1.85);
+            const pelniBandRed = new THREE.Mesh(pelniBandRedGeo, matPelniRed);
+            pelniBandRed.position.set(0, 4.8, 0);
+            nknBowGroup.add(pelniBandRed);
+
+            const pelniBandYellowGeo = createLoftedHullGeometry(88.35, 7.90, 0.38, 1.85);
+            const pelniBandYellow = new THREE.Mesh(pelniBandYellowGeo, matPelniYellow);
+            pelniBandYellow.position.set(0, 5.75, 0);
+            nknBowGroup.add(pelniBandYellow);
+
+            for (let side of [-1, 1]) {
+                const rotSide = side > 0 ? Math.PI / 2 : -Math.PI / 2;
+
+                const midshipHullSign = new THREE.Mesh(new THREE.PlaneGeometry(26.0, 4.2), matHullBanner);
+                midshipHullSign.position.set(side * 8.02, 4.9, 2.0);
+                midshipHullSign.rotation.y = rotSide;
+                nknBowGroup.add(midshipHullSign);
+
+                const bowSign = new THREE.Mesh(new THREE.PlaneGeometry(14.5, 3.0), matNamePlate);
+                bowSign.position.set(side * 7.45, 5.5, -21.5);
+                bowSign.rotation.y = rotSide + (side * -0.15);
+                nknBowGroup.add(bowSign);
+
+                const sternSideSign = new THREE.Mesh(new THREE.PlaneGeometry(13.0, 2.7), matNamePlate);
+                sternSideSign.position.set(side * 7.65, 5.2, 26.5);
+                sternSideSign.rotation.y = rotSide + (side * 0.06);
+                nknBowGroup.add(sternSideSign);
+            }
+
+            const mainDeck = new THREE.Mesh(new THREE.BoxGeometry(14.8, 0.7, 78), matDeckFore);
+            mainDeck.position.set(0, 7.2, 1.5);
+            mainDeck.receiveShadow = true;
+            nknBowGroup.add(mainDeck);
+
+            for (let side of [-1, 1]) {
+                const windlass = new THREE.Mesh(new THREE.CylinderGeometry(0.65, 0.65, 1.8, 10), matSteelDark);
+                windlass.rotation.z = Math.PI / 2;
+                windlass.position.set(side * 2.2, 8.0, -33.5);
+                nknBowGroup.add(windlass);
+            }
+
+            const foreMast = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.35, 9.5, 10), matHullWhite);
+            foreMast.position.set(0, 12.2, -29.5);
+            nknBowGroup.add(foreMast);
+
+            const superGroup = new THREE.Group();
+            superGroup.position.set(0, 7.5, 2.0);
+
+            const tier1 = new THREE.Mesh(new THREE.BoxGeometry(14.4, 2.7, 54), matCabinDeck);
+            tier1.position.set(0, 1.35, 2.0);
+            tier1.castShadow = true;
+            superGroup.add(tier1);
+
+            const tier2 = new THREE.Mesh(new THREE.BoxGeometry(13.8, 2.7, 50), matCabinDeck);
+            tier2.position.set(0, 4.05, 3.0);
+            tier2.castShadow = true;
+            superGroup.add(tier2);
+
+            const tier3 = new THREE.Mesh(new THREE.BoxGeometry(12.2, 2.7, 45), matCabinDeck);
+            tier3.position.set(0, 6.75, 3.5);
+            tier3.castShadow = true;
+            superGroup.add(tier3);
+
+            const promenadeFloor = new THREE.Mesh(new THREE.BoxGeometry(14.6, 0.35, 46), matDeckTeak);
+            promenadeFloor.position.set(0, 5.5, 3.5);
+            superGroup.add(promenadeFloor);
+
+            for (let side of [-1, 1]) {
+                for (let bZ = -11; bZ <= 16; bZ += 9) {
+                    const boatGroup = new THREE.Group();
+                    boatGroup.position.set(side * 6.95, 6.9, bZ);
+
+                    const boatBody = new THREE.Mesh(new THREE.BoxGeometry(1.7, 1.25, 5.8), matLifeboatOrange);
+                    boatBody.castShadow = true;
+                    boatGroup.add(boatBody);
+
+                    const boatCanopy = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.55, 4.2), matHullWhite);
+                    boatCanopy.position.y = 0.7;
+                    boatGroup.add(boatCanopy);
+
+                    for (let dz of [-2.1, 2.1]) {
+                        const davit = new THREE.Mesh(new THREE.BoxGeometry(1.2, 2.2, 0.3), matHullWhite);
+                        davit.position.set(-side * 0.4, 0.5, dz);
+                        boatGroup.add(davit);
+                    }
+                    superGroup.add(boatGroup);
+                }
+            }
+
+            const tier4 = new THREE.Mesh(new THREE.BoxGeometry(11.6, 2.6, 36), matCabinDeck);
+            tier4.position.set(0, 9.4, 2.0);
+            tier4.castShadow = true;
+            superGroup.add(tier4);
+
+            const upperStripe = new THREE.Mesh(new THREE.BoxGeometry(11.75, 0.55, 36.2), matPelniRed);
+            upperStripe.position.set(0, 10.65, 2.0);
+            superGroup.add(upperStripe);
+
+            const bridgeHouse = new THREE.Mesh(new THREE.BoxGeometry(12.2, 2.7, 8.5), matWindowBridge);
+            bridgeHouse.position.set(0, 12.0, -13.5);
+            bridgeHouse.castShadow = true;
+            superGroup.add(bridgeHouse);
+
+            const bridgeWings = new THREE.Mesh(new THREE.BoxGeometry(18.6, 1.5, 3.6), matHullWhite);
+            bridgeWings.position.set(0, 11.4, -14.8);
+            bridgeWings.castShadow = true;
+            superGroup.add(bridgeWings);
+
+            const bridgeRoof = new THREE.Mesh(new THREE.BoxGeometry(13.0, 0.45, 9.2), matHullWhite);
+            bridgeRoof.position.set(0, 13.5, -13.5);
+            superGroup.add(bridgeRoof);
+
+            const roofTopNameBoard = new THREE.Mesh(new THREE.PlaneGeometry(11.5, 3.2), matHullBanner);
+            roofTopNameBoard.position.set(0, 10.8, -2.5);
+            roofTopNameBoard.rotation.x = -Math.PI / 2;
+            superGroup.add(roofTopNameBoard);
+
+            const frontNameBoard = new THREE.Mesh(new THREE.PlaneGeometry(7.5, 1.5), matNamePlate);
+            frontNameBoard.position.set(0, 14.35, -17.9);
+            frontNameBoard.rotation.y = Math.PI;
+            superGroup.add(frontNameBoard);
+
+            for (let side of [-1, 1]) {
+                const sideNameBoard = new THREE.Mesh(new THREE.PlaneGeometry(8.2, 1.6), matNamePlate);
+                sideNameBoard.position.set(side * 6.55, 14.35, -13.5);
+                sideNameBoard.rotation.y = side > 0 ? Math.PI / 2 : -Math.PI / 2;
+                superGroup.add(sideNameBoard);
+            }
+
+            const mainMast = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.65, 8.5, 12), matHullWhite);
+            mainMast.position.set(0, 17.6, -13.2);
+            superGroup.add(mainMast);
+
+            const yardArm = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.12, 7.5, 8), matHullWhite);
+            yardArm.rotation.z = Math.PI / 2;
+            yardArm.position.set(0, 19.5, -13.2);
+            superGroup.add(yardArm);
+
+            for (let side of [-1, 1]) {
+                const radome = new THREE.Mesh(new THREE.SphereGeometry(0.85, 14, 14), matHullWhite);
+                radome.position.set(side * 3.8, 14.5, -12.5);
+                superGroup.add(radome);
+            }
+
+            const radarXBand = new THREE.Mesh(new THREE.BoxGeometry(3.4, 0.3, 0.45), matHullWhite);
+            radarXBand.position.set(0, 16.5, -14.2);
+            superGroup.add(radarXBand);
+            radarScanners.push(radarXBand);
+
+            const radarSBand = new THREE.Mesh(new THREE.BoxGeometry(4.2, 0.35, 0.55), matPelniRed);
+            radarSBand.position.set(0, 18.4, -13.2);
+            superGroup.add(radarSBand);
+            radarScanners.push(radarSBand);
+
+            const funnelGroup = new THREE.Group();
+            funnelGroup.position.set(0, 13.8, 10.5);
+
+            const funnelBody = new THREE.Mesh(new THREE.CylinderGeometry(2.2, 3.0, 7.2, 16), matHullWhite);
+            funnelBody.scale.set(0.75, 1, 1.55);
+            funnelBody.castShadow = true;
+            funnelGroup.add(funnelBody);
+
+            const funnelStripeRed = new THREE.Mesh(new THREE.CylinderGeometry(2.35, 2.55, 2.0, 16), matPelniRed);
+            funnelStripeRed.scale.set(0.76, 1, 1.56);
+            funnelStripeRed.position.y = 0.8;
+            funnelGroup.add(funnelStripeRed);
+
+            const funnelStripeYel = new THREE.Mesh(new THREE.CylinderGeometry(2.28, 2.34, 0.55, 16), matPelniYellow);
+            funnelStripeYel.scale.set(0.77, 1, 1.57);
+            funnelStripeYel.position.y = 2.0;
+            funnelGroup.add(funnelStripeYel);
+
+            const funnelTop = new THREE.Mesh(new THREE.CylinderGeometry(2.15, 2.22, 1.1, 16), matSteelDark);
+            funnelTop.scale.set(0.75, 1, 1.55);
+            funnelTop.position.y = 3.4;
+            funnelGroup.add(funnelTop);
+
+            superGroup.add(funnelGroup);
+
+            const aftDeckPad = new THREE.Mesh(new THREE.BoxGeometry(12.6, 0.5, 14), matDeckTeak);
+            aftDeckPad.position.set(0, 8.1, 24.5);
+            superGroup.add(aftDeckPad);
+
+            nknBowGroup.add(superGroup);
+            ownShipGroup.add(nknBowGroup);
+
+            bargeGroup = null;
+            towRopeMesh = null;
+            nkpiBowGroup = new THREE.Group();
+            ownShipGroup.add(nkpiBowGroup);
+
+            ownShipLightsGroup = new THREE.Group();
+
+            const portLightMesh = new THREE.Mesh(
+                new THREE.SphereGeometry(0.55, 12, 12),
+                new THREE.MeshBasicMaterial({ color: 0xff2222 })
+            );
+            portLightMesh.position.set(-9.3, 19.2, -12.8);
+            const portPointLight = new THREE.PointLight(0xff2222, 2.2, 38);
+            portLightMesh.add(portPointLight);
+            ownShipLightsGroup.add(portLightMesh);
+
+            const stbdLightMesh = new THREE.Mesh(
+                new THREE.SphereGeometry(0.55, 12, 12),
+                new THREE.MeshBasicMaterial({ color: 0x22ff22 })
+            );
+            stbdLightMesh.position.set(9.3, 19.2, -12.8);
+            const stbdPointLight = new THREE.PointLight(0x22ff22, 2.2, 38);
+            stbdLightMesh.add(stbdPointLight);
+            ownShipLightsGroup.add(stbdLightMesh);
+
+            const foreMastLight = new THREE.Mesh(
+                new THREE.SphereGeometry(0.55, 12, 12),
+                new THREE.MeshBasicMaterial({ color: 0xffffff })
+            );
+            foreMastLight.position.set(0, 17.2, -29.5);
+            ownShipLightsGroup.add(foreMastLight);
+
+            const aftMastLight = new THREE.Mesh(
+                new THREE.SphereGeometry(0.6, 12, 12),
+                new THREE.MeshBasicMaterial({ color: 0xffffff })
+            );
+            aftMastLight.position.set(0, 29.0, -11.2);
+            ownShipLightsGroup.add(aftMastLight);
+
+            const sternLightMesh = new THREE.Mesh(
+                new THREE.SphereGeometry(0.5, 10, 10),
+                new THREE.MeshBasicMaterial({ color: 0xffffff })
+            );
+            sternLightMesh.position.set(0, 10.5, 42.5);
+            ownShipLightsGroup.add(sternLightMesh);
+
+            ownShipGroup.add(ownShipLightsGroup);
+        }
+
+        function initWakeAndSmokeEffects() {
+            const wakeGeo = new THREE.RingGeometry(0.6, 2.2, 16);
+            wakeGeo.rotateX(-Math.PI / 2);
+
+            for (let i = 0; i < 45; i++) {
+                const wakeMat = new THREE.MeshBasicMaterial({
+                    color: 0xe0f2fe,
+                    transparent: true,
+                    opacity: 0,
+                    side: THREE.DoubleSide
+                });
+                const mesh = new THREE.Mesh(wakeGeo, wakeMat);
+                mesh.position.y = 0.12;
+                scene.add(mesh);
+                shipWakeParticles.push({
+                    mesh,
+                    age: i * 0.08,
+                    maxAge: 3.6,
+                    vx: 0,
+                    vz: 0,
+                    active: false
+                });
+            }
+
+            const smokeGeo = new THREE.SphereGeometry(0.9, 8, 8);
+            for (let i = 0; i < 22; i++) {
+                const smokeMat = new THREE.MeshLambertMaterial({
+                    color: 0xcbd5e1,
+                    transparent: true,
+                    opacity: 0
+                });
+                const mesh = new THREE.Mesh(smokeGeo, smokeMat);
+                scene.add(mesh);
+                smokeParticles.push({
+                    mesh,
+                    age: i * 0.12,
+                    maxAge: 2.6,
+                    active: false
+                });
+            }
+        }
+
+        function initRainWeatherSystem() {
+            const rainCount = 1800;
+            const rainGeo = new THREE.BufferGeometry();
+            const positions = new Float32Array(rainCount * 3);
+
+            for (let i = 0; i < rainCount; i++) {
+                positions[i * 3] = (Math.random() - 0.5) * 420;
+                positions[i * 3 + 1] = Math.random() * 180;
+                positions[i * 3 + 2] = (Math.random() - 0.5) * 420;
+            }
+
+            rainGeo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+            const rainMat = new THREE.PointsMaterial({
+                color: 0xcbd5e1,
+                size: 0.75,
+                transparent: true,
+                opacity: 0.65
+            });
+
+            rainSystem = new THREE.Points(rainGeo, rainMat);
+            rainSystem.visible = false;
+            scene.add(rainSystem);
+        }
+
+        function applyAtmosphereAndWeather() {
+            const isNight = simState.isNight;
+            const mode = simState.weatherMode;
+
+            if (rainSystem) {
+                rainSystem.visible = (mode === 'STORM');
+            }
+
+            if (mode === 'CLEAR') {
+                const bgHex = isNight ? 0x020617 : 0x7dd3fc;
+                scene.background.setHex(bgHex);
+                scene.fog.color.setHex(bgHex);
+                scene.fog.density = 0.00065;
+                skyLights.hemi.intensity = isNight ? 0.12 : 0.65;
+                skyLights.ambient.intensity = isNight ? 0.10 : 0.35;
+                skyLights.sun.intensity = isNight ? 0.08 : 1.35;
+                waterMesh.material.color.setHex(isNight ? 0x011627 : 0x035388);
+            } else if (mode === 'FOG') {
+                const fogHex = isNight ? 0x0f172a : 0xcbd5e1;
+                scene.background.setHex(fogHex);
+                scene.fog.color.setHex(fogHex);
+                scene.fog.density = 0.0042;
+                skyLights.hemi.intensity = isNight ? 0.15 : 0.50;
+                skyLights.ambient.intensity = isNight ? 0.15 : 0.45;
+                skyLights.sun.intensity = isNight ? 0.04 : 0.35;
+                waterMesh.material.color.setHex(isNight ? 0x0b192c : 0x334155);
+            } else if (mode === 'STORM') {
+                const stormHex = isNight ? 0x02040a : 0x1e293b;
+                scene.background.setHex(stormHex);
+                scene.fog.color.setHex(stormHex);
+                scene.fog.density = 0.0022;
+                skyLights.hemi.intensity = isNight ? 0.08 : 0.28;
+                skyLights.ambient.intensity = isNight ? 0.08 : 0.22;
+                skyLights.sun.intensity = isNight ? 0.05 : 0.25;
+                waterMesh.material.color.setHex(isNight ? 0x010b14 : 0x0f2942);
+            }
+        }
+
+        function updateWakeAndEnvironmentEffects(dt) {
+            const time = clock.getElapsedTime();
+
+            if (waterGeometry) {
+                const pos = waterGeometry.attributes.position;
+                const amp = simState.waveAmplitude;
+                const freq = simState.waveFrequency;
+                for (let i = 0; i < pos.count; i++) {
+                    const vx = pos.getX(i);
+                    const vy = pos.getY(i);
+                    const waveZ = Math.sin(vx * 0.028 + time * freq) * amp
+                                + Math.cos(vy * 0.032 + time * (freq * 0.82)) * (amp * 0.85)
+                                + Math.sin((vx + vy) * 0.018 + time * (freq * 1.15)) * (amp * 0.45);
+                    pos.setZ(i, waveZ);
+                }
+                pos.needsUpdate = true;
+            }
+
+            if (rainSystem && rainSystem.visible) {
+                const positions = rainSystem.geometry.attributes.position.array;
+                for (let i = 0; i < positions.length; i += 3) {
+                    positions[i + 1] -= dt * 95;
+                    positions[i] -= dt * 18;
+                    if (positions[i + 1] < 0) {
+                        positions[i + 1] = 175;
+                        positions[i] = simState.x + (Math.random() - 0.5) * 420;
+                        positions[i + 2] = simState.z + (Math.random() - 0.5) * 420;
+                    }
+                }
+                rainSystem.geometry.attributes.position.needsUpdate = true;
+
+                if (Math.random() < 0.005) {
+                    skyLights.ambient.intensity = 1.8;
+                    setTimeout(() => {
+                        if (simState.weatherMode === 'STORM') {
+                            skyLights.ambient.intensity = simState.isNight ? 0.08 : 0.22;
+                        }
+                    }, 90);
+                }
+            }
+
+            radarScanners.forEach(scanner => {
+                scanner.rotation.y += dt * 2.8;
+            });
+
+            const speedAbs = Math.abs(simState.speedKnots);
+            const headingRad = THREE.MathUtils.degToRad(simState.heading);
+            const bowDist = 42.5;
+            const sternDist = -43.5;
+
+            shipWakeParticles.forEach((p, idx) => {
+                p.age += dt;
+                if (p.age >= p.maxAge) {
+                    p.age = 0;
+                    if (speedAbs > 0.4) {
+                        p.active = true;
+                        const isBow = idx % 2 === 0;
+                        const offsetZ = isBow ? bowDist : sternDist;
+                        const spreadSide = (idx % 4 < 2) ? 1 : -1;
+
+                        const spawnX = simState.x + Math.sin(headingRad) * offsetZ + Math.cos(headingRad) * (spreadSide * 2.2);
+                        const spawnZ = simState.z - Math.cos(headingRad) * offsetZ + Math.sin(headingRad) * (spreadSide * 2.2);
+                        p.mesh.position.set(spawnX, 0.18, spawnZ);
+                        p.mesh.scale.set(0.6, 0.6, 0.6);
+
+                        const sideSpeed = (isBow ? 3.2 : 1.5) * spreadSide * (speedAbs / simState.maxSpeed);
+                        p.vx = Math.cos(headingRad) * sideSpeed;
+                        p.vz = Math.sin(headingRad) * sideSpeed;
+                    } else {
+                        p.active = false;
+                        p.mesh.material.opacity = 0;
+                    }
+                }
+
+                if (p.active) {
+                    const progress = p.age / p.maxAge;
+                    p.mesh.position.x += p.vx * dt;
+                    p.mesh.position.z += p.vz * dt;
+                    const scale = 0.6 + progress * (2.5 + speedAbs * 0.22);
+                    p.mesh.scale.set(scale, scale, scale);
+                    p.mesh.material.opacity = Math.max(0, (1 - progress) * 0.55 * Math.min(1, speedAbs / 5));
+                }
+            });
+
+            const rpmRatio = Math.abs(simState.rpm) / 120;
+            smokeParticles.forEach(sp => {
+                sp.age += dt;
+                if (sp.age >= sp.maxAge) {
+                    sp.age = 0;
+                    if (rpmRatio > 0.04) {
+                        sp.active = true;
+                        const funnelOffset = -12.5;
+                        const funnelHeight = 25.2;
+                        sp.mesh.position.set(
+                            simState.x + Math.sin(headingRad) * funnelOffset,
+                            funnelHeight,
+                            simState.z - Math.cos(headingRad) * funnelOffset
+                        );
+                        sp.mesh.scale.set(0.85, 0.85, 0.85);
+                    } else {
+                        sp.active = false;
+                        sp.mesh.material.opacity = 0;
+                    }
+                }
+
+                if (sp.active) {
+                    const prog = sp.age / sp.maxAge;
+                    sp.mesh.position.y += dt * (3.5 + rpmRatio * 4);
+                    sp.mesh.position.x -= Math.sin(headingRad) * dt * 3;
+                    sp.mesh.position.z += Math.cos(headingRad) * dt * 3;
+                    const s = 0.5 + prog * 3.2;
+                    sp.mesh.scale.set(s, s, s);
+                    sp.mesh.material.opacity = (1 - prog) * 0.35 * (0.3 + rpmRatio * 0.7);
+                }
+            });
+        }
+
+        function createBuoy(x, z, type) {
+            const group = new THREE.Group();
+            group.position.set(x, 0, z);
+
+            const colorHex = type === 'PORT' ? 0xef4444 : (type === 'STBD' ? 0x22c55e : 0xfacc15);
+            const baseMat = new THREE.MeshLambertMaterial({ color: colorHex });
+
+            const floatMesh = new THREE.Mesh(new THREE.CylinderGeometry(2.2, 2.2, 2.5, 12), baseMat);
+            floatMesh.position.y = 1.2;
+            group.add(floatMesh);
+
+            const towerGeo = type === 'PORT' 
+                ? new THREE.CylinderGeometry(1.1, 1.4, 5, 10)
+                : new THREE.ConeGeometry(1.8, 5.5, 10);
+            const towerMesh = new THREE.Mesh(towerGeo, baseMat);
+            towerMesh.position.y = 4.5;
+            group.add(towerMesh);
+
+            const beaconMesh = new THREE.Mesh(
+                new THREE.SphereGeometry(0.65, 8, 8),
+                new THREE.MeshBasicMaterial({ color: colorHex })
+            );
+            beaconMesh.position.y = 7.6;
+            group.add(beaconMesh);
+
+            scenarioGroup.add(group);
+            const bIdx = simState.buoys.length + 1;
+            simState.buoys.push({
+                id: `BUOY-${bIdx}`,
+                name: type === 'PORT' ? `Pelampung Merah #${bIdx} (Port)` : (type === 'STBD' ? `Pelampung Hijau #${bIdx} (Stbd)` : `Pelampung Suar #${bIdx}`),
+                category: 'PELAMPUNG NAVIGASI',
+                x, z, type, mesh: group, beacon: beaconMesh, radius: 4.5
+            });
+        }
+
+        function createAIShip(x, z, heading, speedKnots, roleDesc) {
+            const group = new THREE.Group();
+            group.position.set(x, 0, z);
+            group.rotation.y = -THREE.MathUtils.degToRad(heading);
+
+            const aiHullGeo = createLoftedHullGeometry(54, 6.2, 4.6, 1.2);
+            const aiHullMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.45, metalness: 0.3, side: THREE.DoubleSide });
+            const hull = new THREE.Mesh(aiHullGeo, aiHullMat);
+            hull.position.y = 0.8;
+            hull.castShadow = true;
+            group.add(hull);
+
+            const aiDeck = new THREE.Mesh(
+                new THREE.BoxGeometry(11.4, 0.6, 42),
+                new THREE.MeshStandardMaterial({ color: 0x7f1d1d, roughness: 0.7 })
+            );
+            aiDeck.position.set(0, 3.8, 0);
+            group.add(aiDeck);
+
+            const superStruct = new THREE.Mesh(
+                new THREE.BoxGeometry(10.2, 8.5, 9),
+                new THREE.MeshStandardMaterial({ color: 0xf8fafc, roughness: 0.4 })
+            );
+            superStruct.position.set(0, 8.0, 12);
+            superStruct.castShadow = true;
+            group.add(superStruct);
+
+            const aiBridge = new THREE.Mesh(
+                new THREE.BoxGeometry(11.5, 2.2, 4.5),
+                new THREE.MeshStandardMaterial({ color: 0x0f172a, roughness: 0.2 })
+            );
+            aiBridge.position.set(0, 11.5, 10);
+            group.add(aiBridge);
+
+            const portL = new THREE.Mesh(new THREE.SphereGeometry(0.6, 8, 8), new THREE.MeshBasicMaterial({ color: 0xff1111 }));
+            portL.position.set(-6.0, 9.5, 9);
+            group.add(portL);
+
+            const stbdL = new THREE.Mesh(new THREE.SphereGeometry(0.6, 8, 8), new THREE.MeshBasicMaterial({ color: 0x11ff11 }));
+            stbdL.position.set(6.0, 9.5, 9);
+            group.add(stbdL);
+
+            const mastL = new THREE.Mesh(new THREE.SphereGeometry(0.65, 8, 8), new THREE.MeshBasicMaterial({ color: 0xffffff }));
+            mastL.position.set(0, 15, -16);
+            group.add(mastL);
+
+            scenarioGroup.add(group);
+            const aiIdx = simState.aiShips.length + 1;
+            const mmsiCode = `525019${100 + aiIdx * 37}`;
+            simState.aiShips.push({
+                id: `AIS-${aiIdx}`,
+                name: roleDesc,
+                mmsi: mmsiCode,
+                category: 'KAPAL AIS TARGET',
+                x, z, heading, speedKnots, roleDesc, mesh: group, radius: 18, ruleType: roleDesc
+            });
+        }
+
+        function createGoalMarker(x, z, radius, labelColor = 0x38bdf8) {
+            const ringGeo = new THREE.RingGeometry(radius - 2, radius, 32);
+            ringGeo.rotateX(-Math.PI / 2);
+            const ringMat = new THREE.MeshBasicMaterial({ color: labelColor, side: THREE.DoubleSide });
+            const ringMesh = new THREE.Mesh(ringGeo, ringMat);
+            ringMesh.position.set(x, 0.4, z);
+            scenarioGroup.add(ringMesh);
+
+            const pillarGeo = new THREE.CylinderGeometry(1.5, 1.5, 120, 12, 1, true);
+            const pillarMat = new THREE.MeshBasicMaterial({
+                color: labelColor,
+                transparent: true,
+                opacity: 0.28,
+                side: THREE.DoubleSide
+            });
+            const pillarMesh = new THREE.Mesh(pillarGeo, pillarMat);
+            pillarMesh.position.set(x, 60, z);
+            scenarioGroup.add(pillarMesh);
+        }
+
+        function createIsland(x, z, radius, height) {
+            const geo = new THREE.ConeGeometry(radius, height, 9);
+            const mat = new THREE.MeshLambertMaterial({ color: 0x15803d, flatShading: true });
+            const mesh = new THREE.Mesh(geo, mat);
+            mesh.position.set(x, height / 2 - 2, z);
+            scenarioGroup.add(mesh);
+            const islIdx = simState.islands.length + 1;
+            simState.islands.push({
+                id: `ISL-${islIdx}`,
+                name: `Pulau Karang #${islIdx} (Dangkal)`,
+                category: 'DARATAN / PULAU',
+                x, z, radius: radius * 0.8
+            });
+        }
+
+        // Membuat Struktur Dermaga Pelabuhan 3D Lengkap dengan Fender Karet, Gudang & Crane
+        function createPortPier(centerX, centerZ, width, length, side = 'RIGHT') {
+            const pierGroup = new THREE.Group();
+            pierGroup.position.set(centerX, 0, centerZ);
+
+            // Lantai Beton Dermaga Utama
+            const deckMat = new THREE.MeshStandardMaterial({ color: 0x64748b, roughness: 0.85, metalness: 0.1 });
+            const pierDeck = new THREE.Mesh(new THREE.BoxGeometry(width, 4.5, length), deckMat);
+            pierDeck.position.y = 1.6;
+            pierDeck.receiveShadow = true;
+            pierDeck.castShadow = true;
+            pierGroup.add(pierDeck);
+
+            // Garis Kuning Pengaman Tepi Dermaga
+            const edgeSign = side === 'RIGHT' ? -1 : 1;
+            const safetyLine = new THREE.Mesh(
+                new THREE.BoxGeometry(0.6, 0.12, length - 2),
+                new THREE.MeshBasicMaterial({ color: 0xfacc15 })
+            );
+            safetyLine.position.set(edgeSign * (width / 2 - 0.8), 3.9, 0);
+            pierGroup.add(safetyLine);
+
+            // Deretan Dapra Karet (Rubber Fenders) & Bolder Tambat di Tepi Dermaga
+            const fenderMat = new THREE.MeshStandardMaterial({ color: 0x0f172a, roughness: 0.9 });
+            const bollardMat = new THREE.MeshStandardMaterial({ color: 0xf59e0b, roughness: 0.4, metalness: 0.6 });
+            for (let zOff = -length / 2 + 18; zOff <= length / 2 - 18; zOff += 26) {
+                const fender = new THREE.Mesh(new THREE.BoxGeometry(1.4, 2.2, 3.6), fenderMat);
+                fender.position.set(edgeSign * (width / 2 + 0.5), 1.8, zOff);
+                pierGroup.add(fender);
+
+                const bollard = new THREE.Mesh(new THREE.CylinderGeometry(0.45, 0.55, 1.3, 10), bollardMat);
+                bollard.position.set(edgeSign * (width / 2 - 1.8), 4.4, zOff + 8);
+                pierGroup.add(bollard);
+            }
+
+            // Gedung Terminal Penumpang / Gudang Pelabuhan
+            const warehouseMat = new THREE.MeshStandardMaterial({ color: 0xe2e8f0, roughness: 0.5 });
+            const roofMat = new THREE.MeshStandardMaterial({ color: 0x0284c7, roughness: 0.4 });
+            const warehouse = new THREE.Mesh(new THREE.BoxGeometry(width * 0.48, 11, length * 0.45), warehouseMat);
+            warehouse.position.set(-edgeSign * (width * 0.15), 9.2, -length * 0.12);
+            warehouse.castShadow = true;
+            pierGroup.add(warehouse);
+
+            const roof = new THREE.Mesh(new THREE.BoxGeometry(width * 0.52, 1.2, length * 0.47), roofMat);
+            roof.position.set(-edgeSign * (width * 0.15), 15.0, -length * 0.12);
+            pierGroup.add(roof);
+
+            // Menara Pengawas Pelabuhan (Port Control Tower)
+            const tower = new THREE.Mesh(new THREE.CylinderGeometry(2.8, 3.8, 22, 12), warehouseMat);
+            tower.position.set(-edgeSign * (width * 0.15), 14.5, length * 0.28);
+            pierGroup.add(tower);
+
+            const controlRoom = new THREE.Mesh(
+                new THREE.CylinderGeometry(4.5, 3.6, 3.8, 12),
+                new THREE.MeshStandardMaterial({ color: 0x0f172a, roughness: 0.2 })
+            );
+            controlRoom.position.set(-edgeSign * (width * 0.15), 26.5, length * 0.28);
+            pierGroup.add(controlRoom);
+
+            scenarioGroup.add(pierGroup);
+            const pierIdx = simState.portStructures.length + 1;
+            simState.portStructures.push({
+                id: `PIER-${pierIdx}`,
+                name: `Dermaga Pelabuhan #${pierIdx}`,
+                category: 'DERMAGA PELABUHAN',
+                x: centerX,
+                z: centerZ,
+                width,
+                length,
+                minX: centerX - width / 2,
+                maxX: centerX + width / 2,
+                minZ: centerZ - length / 2,
+                maxZ: centerZ + length / 2
+            });
+        }
+
+        // Perbarui status tampilan dropdown misi (semua misi bebas dipilih)
+        function updateScenarioSelectLocks() {
+            const selectEl = document.getElementById('scenario-select');
+            if (!selectEl) return;
+            const titles = {
+                1: "Misi 1: Aturan 9 - Alur Pelayaran Sempit (Narrow Channel)",
+                2: "Misi 2: Aturan 14 - Situasi Berhadapan (Head-On)",
+                3: "Misi 3: Aturan 15 - Bersilangan Beri Jalan (Crossing Give-Way)",
+                4: "Misi 4: Aturan 17 - Kapal Bertahan (Crossing Stand-On)",
+                5: "Misi 5: Aturan 13 - Penyusulan (Overtaking)",
+                6: "Misi 6: Aturan 18 - Tanggung Jawab Antar Kapal (Kapal Ikan)",
+                7: "Misi 7: Olah Gerak Sandar di Pelabuhan (Berthing)",
+                8: "Misi 8: Olah Gerak Keluar Pelabuhan (Departure)"
+            };
+            Array.from(selectEl.options).forEach(opt => {
+                const val = parseInt(opt.value);
+                opt.disabled = false;
+                opt.textContent = (simState.completedScenarios[val] ? "✅ " : "⚓ ") + titles[val];
+            });
+            selectEl.value = simState.currentScenario.toString();
+        }
+
+        function loadScenario(scenId) {
+            const requestedId = parseInt(scenId);
+            simState.currentScenario = requestedId;
+            simState.missionStarted = false;
+            simState.isCountingDown = false;
+            simState.missionCompleted = false;
+            simState.missionFailed = false;
+            simState.hornSoundedInMission = false;
+            simState.hornCounts = { 1: 0, 2: 0, 3: 0, 5: 0 };
+            simState.collisionCooldown = 0;
+            updateScenarioSelectLocks();
+
+            // Reset Badge Status Suling di HUD
+            const hornBadge = document.getElementById('horn-badge');
+            if (hornBadge) {
+                hornBadge.textContent = "SULING: BELUM";
+                hornBadge.className = "bg-slate-800 text-slate-400 border border-slate-700 px-1.5 py-0.5 rounded text-[9px] font-mono-tech";
+            }
+
+            // Bersihkan grup objek skenario sebelumnya
+            while (scenarioGroup.children.length > 0) {
+                scenarioGroup.remove(scenarioGroup.children[0]);
+            }
+            simState.buoys = [];
+            simState.aiShips = [];
+            simState.islands = [];
+            simState.portStructures = [];
+            simState.fishSchools = [];
+            simState.selectedTarget = null;
+            simState.shipTrackHistory = [{ x: 0, z: 0 }];
+
+            // Reset Posisi & Mesin Kapal KM AA 8480
+            simState.x = 0;
+            simState.z = 0;
+            simState.heading = 0;
+            simState.rot = 0;
+            simState.speedKnots = 0;
+            simState.targetSpeedKnots = 0;
+            simState.rpm = 0;
+            simState.targetRpm = 0;
+            simState.rudderOrder = 0;
+            simState.rudderActual = 0;
+            document.getElementById('rudder-slider').value = 0;
+            const wheelSvg = document.getElementById('wheel-svg');
+            if (wheelSvg) wheelSvg.style.transform = `rotate(0deg)`;
+            updateRudderUI();
+            setEngineOrder(0, true);
+            hideAlert();
+            document.getElementById('proximity-warning').classList.add('hidden');
+
+            const descEl = document.getElementById('mission-desc');
+            let briefingTitle = "";
+
+            if (simState.currentScenario === 1) {
+                // MISI 1: P2TL Aturan 9 & Aturan 34 - Alur Pelayaran Sempit (Narrow Channel)
+                briefingTitle = "MISI 1: ATURAN 9 & 34 - ALUR PELAYARAN SEMPIT";
+                simState.requiredHornCode = 1;
+                simState.requiredHornDesc = "Wajib membunyikan 1 Tiup Pendek (● Kanan) saat mengambil lajur kanan alur sempit!";
+                descEl.innerHTML = "<strong>Misi 1 – Aturan 9 (Alur Sempit):</strong> Kemudikan <strong>KM AA 8480</strong> di sisi <strong>KANAN (Starboard)</strong> alur dan wajib bunyikan <strong>1 Tiup Pendek Suling (● Kanan)</strong>!";
+
+                for (let z = -140; z >= -580; z -= 140) {
+                    createBuoy(-55, z, 'PORT');
+                    createBuoy(55, z, 'STBD');
+                }
+                createAIShip(-24, -560, 180, 6.0, "MV Meratus (Jalur Kiri)");
+                createIsland(-190, -350, 95, 55);
+                createIsland(190, -350, 95, 55);
+
+                simState.goalPos = { x: 22, z: -660, radius: 42, requireStop: false };
+                createGoalMarker(22, -660, 42, 0x38bdf8);
+
+            } else if (simState.currentScenario === 2) {
+                // MISI 2: P2TL Aturan 14 & Aturan 34 - Situasi Berhadapan (Head-On Situation)
+                briefingTitle = "MISI 2: ATURAN 14 & 34 - SITUASI BERHADAPAN (HEAD-ON)";
+                simState.requiredHornCode = 1;
+                simState.requiredHornDesc = "Wajib membunyikan 1 Tiup Pendek (● Kanan) saat mengubah haluan ke kanan (Starboard)!";
+                descEl.innerHTML = "<strong>Misi 2 – Aturan 14 (Head-On):</strong> MV Nusantara tepat di haluan. Wajib belok ke <strong>KANAN (Starboard)</strong> dan bunyikan <strong>1 Tiup Pendek Suling (● Kanan)</strong> agar berpapasan <em>Port-to-Port</em>!";
+
+                createBuoy(-70, -200, 'PORT');
+                createBuoy(70, -200, 'STBD');
+                createBuoy(-70, -500, 'PORT');
+                createBuoy(70, -500, 'STBD');
+
+                createAIShip(0, -520, 180, 7.2, "MV Nusantara (Head-On)");
+                createIsland(-230, -360, 80, 50);
+                createIsland(230, -360, 80, 50);
+
+                simState.goalPos = { x: 0, z: -700, radius: 48, requireStop: false };
+                createGoalMarker(0, -700, 48, 0x38bdf8);
+
+            } else if (simState.currentScenario === 3) {
+                // MISI 3: P2TL Aturan 15, 16 & 34 - Situasi Bersilangan Memberi Jalan (Crossing Give-Way)
+                briefingTitle = "MISI 3: ATURAN 15 & 34 - BERSILANGAN (CROSSING GIVE-WAY)";
+                simState.requiredHornCode = 1;
+                simState.requiredHornDesc = "Wajib membunyikan 1 Tiup Pendek (● Kanan) saat berbelok ke kanan memberi jalan!";
+                descEl.innerHTML = "<strong>Misi 3 – Aturan 15 (Crossing Give-Way):</strong> MT Samudera datang dari lambung <strong>KANAN</strong>. Wajib bunyikan <strong>1 Tiup Pendek (● Kanan)</strong>, belok kanan, dan melintas di belakang buritannya!";
+
+                createBuoy(-75, -220, 'PORT');
+                createBuoy(75, -220, 'STBD');
+
+                createAIShip(220, -340, 270, 6.8, "MT Samudera (Stand-On)");
+                createIsland(-210, -340, 75, 45);
+
+                simState.goalPos = { x: 0, z: -660, radius: 48, requireStop: false };
+                createGoalMarker(0, -660, 48, 0x22c55e);
+
+            } else if (simState.currentScenario === 4) {
+                // MISI 4: P2TL Aturan 17 & 34(d) - Kapal Bertahan (Stand-On Vessel)
+                briefingTitle = "MISI 4: ATURAN 17 & 34(d) - KAPAL BERTAHAN (STAND-ON)";
+                simState.requiredHornCode = 5;
+                simState.requiredHornDesc = "Wajib membunyikan 5 Tiup Pendek (●●●●● Awas) sebagai isyarat perhatian pada kapal Give-Way di lambung kiri!";
+                descEl.innerHTML = "<strong>Misi 4 – Aturan 17 (Stand-On):</strong> KM Jayakarta mendekat dari lambung <strong>KIRI</strong>. Pertahankan haluan (350°–010°) & kecepatan, serta bunyikan <strong>5 Tiup Pendek (●●●●● Awas)</strong>!";
+
+                createBuoy(-70, -240, 'PORT');
+                createBuoy(70, -240, 'STBD');
+                createBuoy(-70, -520, 'PORT');
+                createBuoy(70, -520, 'STBD');
+
+                createAIShip(-230, -250, 105, 5.5, "KM Jayakarta (Give-Way)");
+                createIsland(220, -360, 80, 50);
+
+                simState.goalPos = { x: 0, z: -660, radius: 48, requireStop: false };
+                createGoalMarker(0, -660, 48, 0xa855f7);
+
+            } else if (simState.currentScenario === 5) {
+                // MISI 5: P2TL Aturan 13 & 34 - Penyusulan (Overtaking)
+                briefingTitle = "MISI 5: ATURAN 13 & 34 - PENYUSULAN (OVERTAKING)";
+                simState.requiredHornCode = 0; // Bebas pilih 1x (susul kanan) atau 2x (susul kiri)
+                simState.requiredHornDesc = "Wajib membunyikan Suling (● 1x jika menyusul dari Kanan, atau ●● 2x jika menyusul dari Kiri)!";
+                descEl.innerHTML = "<strong>Misi 5 – Aturan 13 (Overtaking):</strong> Susul LCT Bahari di depan haluan dengan jarak aman (> 40m) dan <strong>WAJIB bunyikan Suling (● Kanan atau ●● Kiri)</strong> sesuai sisi penyusulan!";
+
+                createBuoy(-80, -200, 'PORT');
+                createBuoy(80, -200, 'STBD');
+                createBuoy(-80, -520, 'PORT');
+                createBuoy(80, -520, 'STBD');
+
+                createAIShip(0, -200, 0, 2.8, "LCT Bahari (Disusul)");
+                createIsland(-230, -380, 85, 50);
+                createIsland(230, -380, 85, 50);
+
+                simState.goalPos = { x: 0, z: -700, radius: 48, requireStop: false };
+                createGoalMarker(0, -700, 48, 0xfacc15);
+
+            } else if (simState.currentScenario === 6) {
+                // MISI 6: P2TL Aturan 18 & 34 - Tanggung Jawab Antar Kapal (Menghindari Kapal Ikan)
+                briefingTitle = "MISI 6: ATURAN 18 & 34 - HIRARKI KAPAL (KAPAL IKAN)";
+                simState.requiredHornCode = 0; // Wajib bunyikan suling manuver
+                simState.requiredHornDesc = "Wajib membunyikan Suling Olah Gerak (● Kanan / ●● Kiri) saat bermanuver menghindari kapal ikan!";
+                descEl.innerHTML = "<strong>Misi 6 – Aturan 18 (Hirarki Kapal):</strong> Hindari Kapal Ikan (KM Mina Jaya) yang sedang menebar jaring (> 55m) dan <strong>WAJIB bunyikan Suling Olah Gerak</strong>!";
+
+                createBuoy(-85, -220, 'PORT');
+                createBuoy(85, -220, 'STBD');
+
+                createAIShip(-10, -330, 45, 1.5, "KM Mina Jaya (Kapal Ikan)");
+                createBuoy(15, -310, 'SAFE');
+                createBuoy(30, -295, 'SAFE');
+
+                createAIShip(190, -520, 260, 6.2, "MV Borneo (Crossing)");
+
+                simState.goalPos = { x: 0, z: -720, radius: 50, requireStop: false };
+                createGoalMarker(0, -720, 50, 0x10b981);
+
+            } else if (simState.currentScenario === 7) {
+                // MISI 7: OLAH GERAK SANDAR DI PELABUHAN (BERTHING / DOCKING)
+                briefingTitle = "MISI 7: OLAH GERAK SANDAR DI PELABUHAN (BERTHING)";
+                simState.requiredHornCode = 3;
+                simState.requiredHornDesc = "Wajib membunyikan 3 Tiup Pendek (●●● Mdr) saat mengolah gerak mesin mundur (Astern) untuk menghentikan kapal di dermaga!";
+                descEl.innerHTML = "<strong>Misi 7 – Sandar Pelabuhan (Berthing):</strong> Kemudikan <strong>KM AA 8480</strong> memasuki kolam pelabuhan, sejajarkan lambung kanan di sisi dermaga, bunyikan <strong>3 Tiup Pendek (●●● Mdr)</strong> saat mengerem mundur, dan hentikan kapal hingga <strong>SOG &lt; 0.6 KTS</strong> di area sandar!";
+
+                // Pelampung Pintu Masuk Kolam Pelabuhan
+                createBuoy(-65, -160, 'PORT');
+                createBuoy(65, -160, 'STBD');
+                createBuoy(-65, -300, 'PORT');
+
+                // Dermaga Beton Utama di Sisi Kanan Kolam Pelabuhan (Tepi Barat Dermaga berada di X = +38)
+                createPortPier(78, -460, 80, 280, 'RIGHT');
+                // Breakwater / Pemecah Gelombang di Sisi Kiri Kolam
+                createPortPier(-135, -450, 50, 260, 'LEFT');
+
+                // Titik Sandar Tepat di Samping Dapra Dermaga (X = +22, Z = -460)
+                simState.goalPos = { x: 22, z: -460, radius: 28, requireStop: true };
+                createGoalMarker(22, -460, 28, 0xf59e0b);
+
+            } else if (simState.currentScenario === 8) {
+                // MISI 8: OLAH GERAK KELUAR PELABUHAN (UNBERTHING / DEPARTURE)
+                briefingTitle = "MISI 8: OLAH GERAK KELUAR PELABUHAN (DEPARTURE)";
+                simState.requiredHornCode = 3;
+                simState.requiredHornDesc = "Wajib membunyikan 3 Tiup Pendek (●●● Mdr) saat mundur lepas sandar dari dermaga, lalu berlayar keluar alur pelabuhan!";
+                descEl.innerHTML = "<strong>Misi 8 – Keluar Pelabuhan (Departure):</strong> Kapal sandar kanan di dermaga. Tarik tuas ke <strong>SLOW/FULL ASTERN</strong>, bunyikan <strong>3 Tiup Pendek (●●● Mdr)</strong> untuk mundur lepas dermaga, lalu maju keluar melewati gerbang pelampung menuju laut lepas!";
+
+                // Posisi Awal Kapal Sandar Kanan di Dermaga Selatan (X = +22, Z = -80, Menghadap Utara 000°)
+                simState.x = 22;
+                simState.z = -80;
+                simState.heading = 0;
+                simState.shipTrackHistory = [{ x: 22, z: -80 }];
+
+                // Dermaga Tempat Kapal Sandar (Tepi Dermaga di X = +38, Z = -180 s.d. +40)
+                createPortPier(78, -70, 80, 220, 'RIGHT');
+                // Dermaga Penumpang Depan (Kapal harus mundur dulu agar tidak menabrak sudut dermaga depan)
+                createPortPier(68, -285, 60, 140, 'RIGHT');
+                createPortPier(-110, -240, 55, 320, 'LEFT');
+
+                // Gerbang Pelampung Alur Keluar Pelabuhan
+                createBuoy(-55, -440, 'PORT');
+                createBuoy(55, -440, 'STBD');
+                createBuoy(-55, -600, 'PORT');
+                createBuoy(55, -600, 'STBD');
+
+                // Kapal yang Masuk Alur (Berpapasan di Sisi Kiri)
+                createAIShip(-24, -580, 180, 5.5, "MV Kelud (Inbound)");
+
+                simState.goalPos = { x: 18, z: -700, radius: 48, requireStop: false };
+                createGoalMarker(18, -700, 48, 0x38bdf8);
+            }
+
+            // Tampilkan Panel Aba-Aba Siaga Misi (Kapal tidak langsung bergerak sebelum aba-aba selesai)
+            showMissionBriefingOverlay(briefingTitle, descEl.innerHTML, simState.requiredHornDesc);
+        }
+
+        // Menampilkan Panel Aba-Aba Sebelum Misi Dimulai
+        function showMissionBriefingOverlay(title, descHtml, hornText) {
+            const overlay = document.getElementById('mission-start-overlay');
+            const titleEl = document.getElementById('briefing-title');
+            const descEl = document.getElementById('briefing-desc');
+            const hornEl = document.getElementById('briefing-horn-text');
+            const countdownBox = document.getElementById('countdown-box');
+            const launchBtn = document.getElementById('btn-launch-mission');
+
+            if (!overlay) return;
+            titleEl.textContent = title;
+            descEl.innerHTML = descHtml;
+            hornEl.textContent = hornText;
+            countdownBox.classList.add('hidden');
+            launchBtn.classList.remove('hidden');
+            overlay.classList.remove('hidden');
+        }
+
+        // Fungsi Menjalankan Hitung Mundur Aba-aba Start Misi
+        function startMissionWithCountdown() {
+            if (simState.isCountingDown || simState.missionStarted) return;
+            initAudio();
+            simState.isCountingDown = true;
+
+            const countdownBox = document.getElementById('countdown-box');
+            const countdownText = document.getElementById('countdown-text');
+            const launchBtn = document.getElementById('btn-launch-mission');
+
+            launchBtn.classList.add('hidden');
+            countdownBox.classList.remove('hidden');
+
+            let step = 3;
+            countdownText.textContent = `ABA-ABA SIAP... 3`;
+            playTelegraphBell(0);
+            speakTelegraphOrder("Perhatian di anjungan, bersiap mulai misi. Tiga, dua, satu, silakan olah gerak!");
+
+            const timer = setInterval(() => {
+                step--;
+                if (step > 0) {
+                    countdownText.textContent = `ABA-ABA SIAP... ${step}`;
+                    playTelegraphBell(0);
+                } else if (step === 0) {
+                    countdownText.textContent = `⚓ SIAP OLAH GERAK! (STOP ENGINE)`;
+                    playShipHorn("0.45");
+                } else {
+                    clearInterval(timer);
+                    simState.isCountingDown = false;
+                    simState.missionStarted = true;
+                    document.getElementById('mission-start-overlay').classList.add('hidden');
+                    // Pastikan posisi mesin tetap STOP ENGINE (0) saat misi dimulai, pengguna yang menggerakkan tuas EOT
+                    setEngineOrder(0, true);
+                }
+            }, 950);
+        }
+
+        // --- KONTROL INPUT PENGGUNA (EOT, KEMUDI, KAMERA) ---
+        function setEngineOrder(order, silent = false) {
+            const prevOrder = simState.eotOrder;
+            simState.eotOrder = order;
+            const cfg = EOT_TABLE[order.toString()];
+            simState.targetSpeedKnots = cfg.speedRatio * simState.maxSpeed;
+            simState.targetRpm = cfg.rpm;
+
+            // Update UI Tombol EOT
+            Object.keys(EOT_TABLE).forEach(k => {
+                const btn = document.getElementById(`eot-${k}`);
+                if (btn) {
+                    btn.classList.remove('active', 'active-stop', 'active-astern');
+                }
+            });
+            const activeBtn = document.getElementById(`eot-${order}`);
+            if (activeBtn) activeBtn.classList.add(cfg.style);
+
+            // Update Posisi Tuas Telegraph Mekanis & Warna LED Tuas
+            const leverHandle = document.getElementById('eot-lever-handle');
+            const handleLed = document.getElementById('eot-handle-led');
+            if (leverHandle && !leverHandle.classList.contains('dragging')) {
+                leverHandle.style.top = `${cfg.leverPct}%`;
+            }
+            if (handleLed) {
+                handleLed.className = `w-8 h-1.5 rounded-full shadow ${
+                    order > 0 ? 'bg-emerald-400 shadow-emerald-400/80' : (order < 0 ? 'bg-rose-500 shadow-rose-500/80' : 'bg-amber-400 shadow-amber-400/80')
+                }`;
+            }
+
+            const statusText = document.getElementById('eot-status-text');
+            statusText.textContent = cfg.name;
+            statusText.className = `font-mono-tech text-xs font-bold ${
+                order > 0 ? 'text-emerald-400' : (order < 0 ? 'text-rose-400' : 'text-amber-400')
+            }`;
+
+            if (!silent && prevOrder !== order) {
+                playTelegraphBell(order);
+                speakTelegraphOrder(cfg.voiceId);
+            }
+        }
+
+        function setRudderOrder(angle) {
+            const clamped = Math.max(-35, Math.min(35, angle));
+            simState.rudderOrder = clamped;
+            document.getElementById('rudder-slider').value = clamped;
+
+            // Putar Visual Roda Kemudi SVG secara instan mengikuti tangan pengguna
+            const wheelSvg = document.getElementById('wheel-svg');
+            if (wheelSvg) {
+                // 1 derajat kemudi = 6 derajat putaran roda setir kapal
+                wheelSvg.style.transform = `rotate(${clamped * 6}deg)`;
+            }
+
+            updateRudderUI();
+        }
+
+        function updateRudderUI() {
+            const disp = document.getElementById('rudder-display');
+            const order = Math.round(simState.rudderOrder);
+            if (order === 0) {
+                disp.textContent = `MIDSHIPS 0°`;
+                disp.className = "font-mono-tech text-lg sm:text-xl font-extrabold text-white";
+            } else if (order < 0) {
+                disp.textContent = `PORT ${Math.abs(order)}°`;
+                disp.className = "font-mono-tech text-lg sm:text-xl font-extrabold text-rose-400";
+            } else {
+                disp.textContent = `STBD ${order}°`;
+                disp.className = "font-mono-tech text-lg sm:text-xl font-extrabold text-emerald-400";
+            }
+        }
+
+        function setVesselType(type) {
+            simState.vesselType = type;
+            const badge = document.getElementById('vessel-badge');
+            const btnText = document.getElementById('text-vessel');
+
+            if (type === 'NKN') {
+                // Mode Standar Dinas Pelayaran Kapal Penumpang PELNI KM AA 8480
+                simState.maxSpeed = 20.0;
+                simState.inertiaFactor = 0.0085;
+                simState.turnEfficiency = 0.030;
+                badge.textContent = "KM AA 8480 (PELNI)";
+                btnText.textContent = "Dinas Normal";
+            } else {
+                // Mode Manuver Pelabuhan / Alur Sempit (Bow Thruster Assist)
+                simState.maxSpeed = 14.0;
+                simState.inertiaFactor = 0.015;
+                simState.turnEfficiency = 0.044;
+                badge.textContent = "KM AA 8480 (Manuver)";
+                btnText.textContent = "Mode Manuver";
+            }
+            setEngineOrder(simState.eotOrder, true);
+        }
+
+        // --- UPDATE FISIKA KAPAL & AI SETIAP FRAME ---
+        function updatePhysics(dt) {
+            // Batasi dt agar tidak lompat jika tab tidak aktif
+            const safeDt = Math.min(dt, 0.1);
+            const time = clock.getElapsedTime();
+
+            // Jika misi belum dimulai (masih menunggu Aba-aba Start), kapal dan target AI tetap diam di tempat (hanya mengapung halus)
+            if (!simState.missionStarted) {
+                const headingRad = THREE.MathUtils.degToRad(simState.heading);
+                const heaveAmp = simState.waveAmplitude * 0.42;
+                const rollAmp = simState.waveAmplitude * 0.032;
+                const pitchAmp = simState.waveAmplitude * 0.022;
+                ownShipGroup.position.set(simState.x, Math.sin(time * simState.waveFrequency) * heaveAmp, simState.z);
+                ownShipGroup.rotation.y = -headingRad;
+                ownShipGroup.rotation.z = Math.sin(time * (simState.waveFrequency * 0.85)) * rollAmp;
+                ownShipGroup.rotation.x = Math.cos(time * (simState.waveFrequency * 0.95)) * pitchAmp;
+                updateWakeAndEnvironmentEffects(safeDt);
+                updateShipEngineSound();
+                updateHUD();
+                return;
+            }
+
+            // 1. Pergerakan Daun Kemudi (Rudder Servo ~ 3.5 derajat per detik)
+            const rudderDiff = simState.rudderOrder - simState.rudderActual;
+            if (Math.abs(rudderDiff) > 0.05) {
+                simState.rudderActual += Math.sign(rudderDiff) * Math.min(Math.abs(rudderDiff), 14 * safeDt);
+            } else {
+                simState.rudderActual = simState.rudderOrder;
+            }
+
+            // Update Bar Visual Daun Kemudi Aktual
+            const barEl = document.getElementById('rudder-actual-bar');
+            const pct = (Math.abs(simState.rudderActual) / 35) * 50;
+            barEl.style.width = `${pct}%`;
+            if (simState.rudderActual < 0) {
+                barEl.style.marginLeft = `${50 - pct}%`;
+                barEl.className = "h-full bg-rose-500 transition-none";
+            } else {
+                barEl.style.marginLeft = `50%`;
+                barEl.className = "h-full bg-emerald-500 transition-none";
+            }
+
+            const actualTextEl = document.getElementById('rudder-actual-text');
+            if (actualTextEl) {
+                const actVal = Math.abs(simState.rudderActual).toFixed(1);
+                const sideChar = simState.rudderActual < -0.2 ? 'P' : (simState.rudderActual > 0.2 ? 'S' : '');
+                actualTextEl.textContent = `${actVal}° ${sideChar}`;
+            }
+
+            // 2. Inersia Mesin & Kecepatan Kapal (Hydrodynamic Drag & Thrust)
+            const speedDiff = simState.targetSpeedKnots - simState.speedKnots;
+            simState.speedKnots += speedDiff * simState.inertiaFactor * (safeDt * 60);
+
+            const rpmDiff = simState.targetRpm - simState.rpm;
+            simState.rpm += rpmDiff * 0.04 * (safeDt * 60);
+
+            // 3. Perhitungan Rate of Turn (ROT) & Heading
+            // Kapal membutuhkan aliran air di daun kemudi untuk berbelok
+            const effectiveFlow = Math.abs(simState.speedKnots) > 0.3 
+                ? (simState.speedKnots / simState.maxSpeed) 
+                : (simState.eotOrder > 0 ? 0.12 : 0); // Efek prop wash saat mulai maju
+
+            const targetRot = simState.rudderActual * effectiveFlow * simState.turnEfficiency * 28; // Derajat per menit
+            simState.rot += (targetRot - simState.rot) * 0.05 * (safeDt * 60);
+
+            // Perubahan Heading
+            simState.heading += (simState.rot / 60) * (safeDt * 60) * 0.45;
+            if (simState.heading >= 360) simState.heading -= 360;
+            if (simState.heading < 0) simState.heading += 360;
+
+            // 4. Translasi Posisi Kapal di Laut
+            const headingRad = THREE.MathUtils.degToRad(simState.heading);
+            const forwardVelocityMetersPerSec = simState.speedKnots * 1.68;
+            simState.x += Math.sin(headingRad) * forwardVelocityMetersPerSec * safeDt;
+            simState.z -= Math.cos(headingRad) * forwardVelocityMetersPerSec * safeDt;
+
+            // Rekam jejak lintasan kapal (Past Track) untuk ditampilkan di layar ECDIS
+            const lastTrack = simState.shipTrackHistory[simState.shipTrackHistory.length - 1];
+            if (!lastTrack || Math.hypot(simState.x - lastTrack.x, simState.z - lastTrack.z) > 12) {
+                simState.shipTrackHistory.push({ x: simState.x, z: simState.z });
+                if (simState.shipTrackHistory.length > 60) simState.shipTrackHistory.shift();
+            }
+
+            // Terapkan ke Model 3D Own Ship (Kapal Penumpang PELNI KM AA 8480) + Efek Oleng (Rolling, Pitching & Heaving) Sesuai Tinggi Gelombang
+            const heaveAmp = simState.waveAmplitude * 0.45;
+            const rollWave = Math.sin(time * (simState.waveFrequency * 0.85)) * (simState.waveAmplitude * 0.038);
+            const pitchWave = Math.cos(time * (simState.waveFrequency * 0.95)) * (simState.waveAmplitude * 0.026);
+
+            ownShipGroup.position.set(simState.x, Math.sin(time * simState.waveFrequency) * heaveAmp, simState.z);
+            ownShipGroup.rotation.y = -headingRad;
+            ownShipGroup.rotation.z = THREE.MathUtils.degToRad(-simState.rot * 0.06) + rollWave;
+            ownShipGroup.rotation.x = pitchWave;
+
+            // 5. Pergerakan Kapal Target AI (P2TL) + Mengikuti Alunan Gelombang
+            simState.aiShips.forEach(ai => {
+                const aiRad = THREE.MathUtils.degToRad(ai.heading);
+                const aiVel = ai.speedKnots * 1.65;
+                ai.x += Math.sin(aiRad) * aiVel * safeDt;
+                ai.z -= Math.cos(aiRad) * aiVel * safeDt;
+                ai.mesh.position.set(ai.x, Math.sin(time * simState.waveFrequency + ai.x) * (heaveAmp * 0.9), ai.z);
+                ai.mesh.rotation.z = Math.sin(time * 1.3 + ai.z) * (rollWave * 1.1);
+                ai.mesh.rotation.x = Math.cos(time * 1.2 + ai.x) * (pitchWave * 1.1);
+            });
+
+            // Redam efek getaran benturan kamera secara bertahap
+            if (simState.shakeIntensity > 0) {
+                simState.shakeIntensity = Math.max(0, simState.shakeIntensity - safeDt * 4.5);
+            }
+            if (simState.collisionCooldown > 0) {
+                simState.collisionCooldown = Math.max(0, simState.collisionCooldown - safeDt);
+            }
+
+            // 6. Cek Peringatan Dini, Tabrakan & Objektif Misi
+            checkCollisionsAndMission();
+
+            // 7. Update Partikel Ombak, Asap, Lingkungan & Suara Mesin Kapal
+            updateWakeAndEnvironmentEffects(safeDt);
+            updateShipEngineSound();
+
+            // 8. Update Tampilan Angka HUD
+            updateHUD();
+        }
+
+        // Fungsi Gagal Misi P2TL -> Wajib Ulang dari Awal
+        function triggerRuleViolation(ruleTitle, explanation) {
+            if (simState.missionFailed || simState.missionCompleted) return;
+            simState.missionFailed = true;
+            setEngineOrder(0, true);
+            playProximityAlarmSound();
+            speakTelegraphOrder("Pelanggaran aturan P2TL! Misi gagal dan wajib diulang dari awal.");
+            showAlert(
+                `❌ PELANGGARAN P2TL: ${ruleTitle}`,
+                `${explanation} Sesuai prosedur ujian praktik SMK Nautika, Anda WAJIB mengulang misi ini dari awal hingga benar!`,
+                "fail"
+            );
+        }
+
+        function checkCollisionsAndMission() {
+            if (simState.missionFailed || simState.missionCompleted) return;
+
+            let closestAiDist = 9999;
+            let closestAiName = "";
+            let imminentWarning = false;
+            let warningMsg = "";
+
+            // =========================================================================
+            // EVALUASI KEPATUHAN ATURAN P2TL COLREGs 1972 TIAP MISI
+            // =========================================================================
+
+            // Misi 1 (Aturan 9 - Alur Pelayaran Sempit): Wajib berada di sisi kanan alur (X >= -8) + Suling 1x
+            if (simState.currentScenario === 1 && simState.z < -120 && simState.z > -600) {
+                if (simState.x < -12) {
+                    triggerRuleViolation(
+                        "ATURAN 9 (ALUR PELAYARAN SEMPIT)",
+                        "KM AA 8480 masuk ke lajur kiri alur sempit! Sesuai Aturan 9(a) P2TL, kapal wajib berlayar sedekat mungkin dengan batas luar alur di lambung KANAN (Starboard)."
+                    );
+                    return;
+                }
+            }
+
+            // Misi 2 (Aturan 14 - Situasi Berhadapan / Head-On): Wajib belok Kanan (Port-to-Port) + Wajib Suling 1x
+            if (simState.currentScenario === 2 && simState.aiShips.length > 0) {
+                const target = simState.aiShips[0];
+                const dz = Math.abs(simState.z - target.z);
+                if (dz < 25 && simState.x < target.x + 8) {
+                    triggerRuleViolation(
+                        "ATURAN 14 (HEAD-ON)",
+                        "Anda tidak mengubah haluan ke KANAN (Starboard) dengan tegas sehingga gagal berpapasan Port-to-Port (kiri dengan kiri) dengan MV Nusantara!"
+                    );
+                    return;
+                }
+                if (dz < 25 && (simState.hornCounts[1] || 0) === 0) {
+                    triggerRuleViolation(
+                        "ATURAN 34 (ISYARAT SULING HEAD-ON)",
+                        "KM AA 8480 mengubah haluan ke kanan tanpa membunyikan 1 Tiup Pendek Suling (● Kanan)! Sesuai Aturan 34(a) P2TL, setiap perubahan haluan wajib disertai isyarat suling."
+                    );
+                    return;
+                }
+            }
+
+            // Misi 3 (Aturan 15 - Situasi Bersilangan / Crossing Give-Way): Dilarang memotong di depan haluan Stand-On + Wajib Suling 1x
+            if (simState.currentScenario === 3 && simState.aiShips.length > 0) {
+                const standOnShip = simState.aiShips[0];
+                const dxAhead = standOnShip.x - simState.x;
+                const dzCross = Math.abs(simState.z - standOnShip.z);
+                if (dxAhead > 10 && dxAhead < 115 && dzCross < 35) {
+                    triggerRuleViolation(
+                        "ATURAN 15 (CROSSING GIVE-WAY)",
+                        "KM AA 8480 memotong di depan haluan kapal Stand-On (MT Samudera)! Sesuai Aturan 15 P2TL, kapal yang wajib memberi jalan harus menghindari memotong di depan haluan kapal lain dan berbelok ke kanan lewat belakang buritannya."
+                    );
+                    return;
+                }
+                if (simState.z < -360 && (simState.hornCounts[1] || 0) === 0) {
+                    triggerRuleViolation(
+                        "ATURAN 34 (ISYARAT SULING GIVE-WAY)",
+                        "Anda melakukan olah gerak memberi jalan ke kanan tanpa membunyikan 1 Tiup Pendek Suling (● Kanan)!"
+                    );
+                    return;
+                }
+            }
+
+            // Misi 4 (Aturan 17 - Kapal Bertahan / Stand-On): Wajib pertahankan haluan & kecepatan
+            if (simState.currentScenario === 4 && simState.z < -80 && simState.z > -420) {
+                const headingDev = simState.heading > 180 ? 360 - simState.heading : simState.heading;
+                if (headingDev > 22) {
+                    triggerRuleViolation(
+                        "ATURAN 17 (STAND-ON VESSEL)",
+                        "Sebagai Kapal Bertahan (Stand-On), Anda mengubah haluan terlalu besar (> 20°)! Sesuai Aturan 17 P2TL, ketika kapal di lambung kiri sudah memberi jalan, Anda wajib mempertahankan haluan dan kecepatan."
+                    );
+                    return;
+                }
+            }
+
+            // Misi 5 (Aturan 13 - Penyusulan / Overtaking): Jaga jarak aman saat menyusul
+            if (simState.currentScenario === 5 && simState.aiShips.length > 0) {
+                const overtaken = simState.aiShips[0];
+                const distOvertake = Math.hypot(overtaken.x - simState.x, overtaken.z - simState.z);
+                if (simState.z < overtaken.z && overtaken.z - simState.z < 55 && Math.abs(simState.x - overtaken.x) < 22) {
+                    triggerRuleViolation(
+                        "ATURAN 13 (PENYUSULAN / OVERTAKING)",
+                        "KM AA 8480 memotong haluan LCT Bahari terlalu dekat sebelum benar-benar melewati dan bebas!"
+                    );
+                    return;
+                }
+                if (distOvertake < 36) {
+                    triggerRuleViolation(
+                        "ATURAN 13 (JARAK AMAN PENYUSULAN)",
+                        "Jarak penyusulan terlalu rapat (< 36m)! Kapal yang menyusul wajib menjaga jarak bebas yang aman dari kapal yang disusul."
+                    );
+                    return;
+                }
+            }
+
+            // Misi 6 (Aturan 18 - Tanggung Jawab Antar Kapal): Wajib menjauhi Kapal Penangkap Ikan
+            if (simState.currentScenario === 6 && simState.aiShips.length > 0) {
+                const fishingVessel = simState.aiShips[0];
+                const distFish = Math.hypot(fishingVessel.x - simState.x, fishingVessel.z - simState.z);
+                if (distFish < 52) {
+                    triggerRuleViolation(
+                        "ATURAN 18 (KAPAL PENANGKAP IKAN)",
+                        "KM AA 8480 melintas terlalu dekat (< 52m) dengan kapal ikan yang sedang menebar jaring! Sesuai Aturan 18(a)(iii) P2TL, kapal tenaga wajib menghindari kapal yang sedang menangkap ikan."
+                    );
+                    return;
+                }
+            }
+
+            // =========================================================================
+            // CEK JARAK CPA & BENTURAN FISIK
+            // =========================================================================
+            for (const ai of simState.aiShips) {
+                const dx = ai.x - simState.x;
+                const dz = ai.z - simState.z;
+                const dist = Math.hypot(dx, dz);
+                if (dist < closestAiDist) {
+                    closestAiDist = dist;
+                    closestAiName = ai.roleDesc;
+                }
+
+                if (dist < 125 && dist >= 32) {
+                    imminentWarning = true;
+                    warningMsg = `${ai.roleDesc} berjarak ${Math.round(dist)}m! Segera olah gerak sesuai P2TL!`;
+                }
+
+                if (dist < 32 && simState.collisionCooldown <= 0) {
+                    simState.collisionCooldown = 4.0;
+                    triggerCollisionImpactEffect();
+                    triggerRuleViolation(
+                        "TUBRUKAN KAPAL (COLLISION)",
+                        `KM AA 8480 bertubrukan dengan ${ai.roleDesc}! Anda gagal mengambil tindakan menghindar yang tegas dan tepat waktu sesuai Aturan 8 P2TL.`
+                    );
+                    return;
+                }
+            }
+
+            // Cek Benturan dengan Pulau / Daratan
+            for (const isl of simState.islands) {
+                const dist = Math.hypot(isl.x - simState.x, isl.z - simState.z);
+                const clearance = dist - isl.radius;
+
+                if (clearance < 65 && clearance >= 14 && Math.abs(simState.speedKnots) > 1.0) {
+                    imminentWarning = true;
+                    warningMsg = `Daratan/Pulau di haluan (${Math.round(clearance)}m)! Awas bahaya kandas!`;
+                }
+
+                if (clearance < 14 && simState.collisionCooldown <= 0) {
+                    simState.collisionCooldown = 4.0;
+                    triggerCollisionImpactEffect();
+                    triggerRuleViolation(
+                        "KAPAL KANDAS / MENABRAK DARATAN",
+                        "Lambung KM AA 8480 menghantam dangkal pulau! Perhatikan pengamatan keliling (Aturan 5 Look-out) dan layar ARPA Radar."
+                    );
+                    return;
+                }
+            }
+
+            // Cek Jarak & Benturan dengan Struktur Dermaga Pelabuhan (Misi Sandar & Keluar Pelabuhan)
+            for (const pier of simState.portStructures) {
+                const clampedX = Math.max(pier.minX, Math.min(pier.maxX, simState.x));
+                const clampedZ = Math.max(pier.minZ, Math.min(pier.maxZ, simState.z));
+                const distToPier = Math.hypot(simState.x - clampedX, simState.z - clampedZ);
+                const halfBeam = 8.2; // Setengah lebar lambung KM AA 8480
+                const fenderGap = distToPier - halfBeam;
+
+                if (fenderGap < 18 && fenderGap >= 1.2 && Math.abs(simState.speedKnots) > 2.8) {
+                    imminentWarning = true;
+                    warningMsg = `Mendekati ${pier.name} terlalu cepat (${Math.abs(simState.speedKnots).toFixed(1)} kt)! Segera Astern!`;
+                }
+
+                // Jika lambung menabrak beton dermaga dengan keras (speed > 2.2 kt atau menembus dinding dermaga)
+                if (fenderGap < 0.8 && simState.collisionCooldown <= 0) {
+                    simState.collisionCooldown = 4.0;
+                    triggerCollisionImpactEffect();
+                    triggerRuleViolation(
+                        "BENTURAN DERMAGA PELABUHAN",
+                        `Lambung KM AA 8480 menghantam ${pier.name} dengan kecepatan ${Math.abs(simState.speedKnots).toFixed(1)} KTS! Dalam olah gerak sandar/lepas sandar, kecepatan sentuh dermaga tidak boleh melebihi batas aman.`
+                    );
+                    return;
+                }
+            }
+
+            // Tampilkan / Sembunyikan Banner Peringatan Akan Menabrak + Bunyi Alarm
+            const proxBanner = document.getElementById('proximity-warning');
+            const proxDetail = document.getElementById('proximity-detail');
+            if (imminentWarning) {
+                proxBanner.classList.remove('hidden');
+                proxDetail.textContent = warningMsg;
+                const now = clock.getElapsedTime();
+                if (now - simState.lastWarningTime > 0.85) {
+                    simState.lastWarningTime = now;
+                    playProximityAlarmSound();
+                }
+            } else {
+                proxBanner.classList.add('hidden');
+            }
+
+            // Update Panel Inspektor AIS / Radar / ECDIS Terpilih Secara Real-Time
+            updateSelectedObjectInspector(closestAiDist, closestAiName);
+
+            // Cek Pencapaian Titik Tujuan Misi (Goal) + Validasi Kewajiban Suling P2TL (Aturan 34)
+            const goalDist = Math.hypot(simState.goalPos.x - simState.x, simState.goalPos.z - simState.z);
+            const distNm = (goalDist / 350).toFixed(2);
+            document.getElementById('mission-distance').textContent = `Jarak: ${distNm} NM`;
+
+            if (!simState.missionCompleted && goalDist < simState.goalPos.radius) {
+                // Khusus Misi Sandar (requireStop: true): Kapal wajib dihentikan hingga kecepatan < 0.65 KTS & tuas STOP ENGINE
+                if (simState.goalPos.requireStop) {
+                    if (Math.abs(simState.speedKnots) > 0.65 || simState.eotOrder !== 0) {
+                        const sb = document.getElementById('selected-obj-status');
+                        if (sb) {
+                            sb.textContent = "REM & STOP!";
+                            sb.className = "text-[8px] text-amber-400 font-bold animate-pulse";
+                        }
+                        return;
+                    }
+                }
+
+                // Pastikan taruna sudah membunyikan suling sesuai Aturan 34 P2TL sebelum dinyatakan lulus
+                if (simState.requiredHornCode > 0 && (simState.hornCounts[simState.requiredHornCode] || 0) === 0) {
+                    triggerRuleViolation(
+                        "ATURAN 34 (ALPA ISYARAT SULING)",
+                        `KM AA 8480 mencapai titik akhir tetapi TIDAK membunyikan isyarat suling yang diwajibkan (${simState.requiredHornDesc})!`
+                    );
+                    return;
+                }
+                if (!simState.hornSoundedInMission) {
+                    triggerRuleViolation(
+                        "ATURAN 34 (ALPA ISYARAT SULING)",
+                        "KM AA 8480 tidak membunyikan isyarat suling olah gerak sama sekali selama misi berlangsung!"
+                    );
+                    return;
+                }
+
+                simState.missionCompleted = true;
+                simState.completedScenarios[simState.currentScenario] = true;
+                setEngineOrder(0, true);
+                playShipHorn("0.4");
+
+                // Update tanda selesai misi dan tawarkan lanjut ke misi berikutnya
+                if (simState.currentScenario < simState.totalScenarios) {
+                    updateScenarioSelectLocks();
+                    showAlert(
+                        `✅ MISI ${simState.currentScenario} LULUS SESUAI P2TL!`,
+                        `Selamat Taruna! Manuver KM AA 8480 pada Misi ${simState.currentScenario} telah sesuai dengan aturan P2TL & prosedur olah gerak. Klik tombol di bawah untuk lanjut ke Misi ${simState.currentScenario + 1}!`,
+                        "next-mission"
+                    );
+                } else {
+                    updateScenarioSelectLocks();
+                    showAlert(
+                        "🏆 MISI 8 LULUS SEMPURNA!",
+                        "Luar biasa! Anda telah menyelesaikan skenario olah gerak Keluar Pelabuhan (Departure) menggunakan kapal KM AA 8480 dengan nilai Kompeten!",
+                        "success"
+                    );
+                }
+            }
+        }
+
+        function updateHUD() {
+            const speedEl = document.getElementById('hud-speed');
+            const headingEl = document.getElementById('hud-heading');
+            const rotEl = document.getElementById('hud-rot');
+            const rpmEl = document.getElementById('hud-rpm');
+            const depthEl = document.getElementById('hud-depth');
+            const posEl = document.getElementById('hud-pos');
+
+            if (speedEl) speedEl.textContent = simState.speedKnots.toFixed(1);
+            if (headingEl) headingEl.textContent = Math.round(simState.heading).toString().padStart(3, '0');
+            if (rotEl) rotEl.textContent = (simState.rot >= 0 ? '+' : '') + simState.rot.toFixed(1);
+            if (rpmEl) rpmEl.textContent = Math.round(simState.rpm);
+
+            // Simulasi Kedalaman Air (UKC) berdasarkan jarak ke daratan
+            let minIslDist = 500;
+            simState.islands.forEach(isl => {
+                const d = Math.hypot(isl.x - simState.x, isl.z - simState.z) - isl.radius;
+                if (d < minIslDist) minIslDist = d;
+            });
+            const depth = Math.max(3.2, Math.min(28.5, 4.0 + minIslDist * 0.12));
+            if (depthEl) depthEl.textContent = depth.toFixed(1);
+
+            // Update Koordinat Lintang & Bujur Dinamis
+            const latMin = (5.12 + (simState.z / 1852)).toFixed(2);
+            const lonMin = (53.40 + (simState.x / 1852)).toFixed(2);
+            if (posEl) posEl.textContent = `06°${latMin}'S 106°${lonMin}'E`;
+        }
+
+        // --- PEMBARUAN DATA REAL-TIME OBJEK TERPILIH PADA PANEL AIS / ARPA / ECDIS ---
+        function updateSelectedObjectInspector(closestAiDist, closestAiName) {
+            const typeEl = document.getElementById('selected-obj-type');
+            const statusEl = document.getElementById('selected-obj-status');
+            const nameEl = document.getElementById('selected-obj-name');
+            const d1El = document.getElementById('selected-obj-detail1');
+            const d2El = document.getElementById('selected-obj-detail2');
+            if (!nameEl) return;
+
+            // Jika belum ada objek diklik, otomatis pantau kapal AIS terdekat atau tampilkan status siap klik
+            let target = simState.selectedTarget;
+            if (!target && simState.aiShips.length > 0) {
+                target = simState.aiShips[0];
+            }
+
+            if (!target) {
+                typeEl.innerHTML = `<i class="fa-solid fa-tower-broadcast mr-1"></i>AIS / ECDIS`;
+                statusEl.textContent = "STANDBY";
+                nameEl.textContent = "KM AA 8480 (Own Ship)";
+                d1El.textContent = `HDG: ${Math.round(simState.heading).toString().padStart(3, '0')}° | SOG: ${simState.speedKnots.toFixed(1)} kt`;
+                d2El.textContent = "Klik objek di Radar / ECDIS";
+                return;
+            }
+
+            // Hitung Jarak (Range) dan Baringan Sejati (True Bearing) ke objek terpilih
+            const dx = target.x - simState.x;
+            const dz = target.z - simState.z;
+            const distMeters = Math.hypot(dx, dz);
+            const distNm = (distMeters / 350).toFixed(2);
+            let bearing = THREE.MathUtils.radToDeg(Math.atan2(dx, -dz));
+            if (bearing < 0) bearing += 360;
+
+            if (target.category === 'KAPAL AIS TARGET') {
+                typeEl.innerHTML = `<i class="fa-solid fa-ship mr-1"></i>AIS TARGET`;
+                statusEl.textContent = distMeters < 130 ? "CPA AWAS!" : "TRACKED";
+                statusEl.className = distMeters < 130 ? "text-[8px] text-rose-400 font-bold animate-pulse" : "text-[8px] text-emerald-400";
+                nameEl.textContent = target.name;
+                d1El.textContent = `MMSI:${target.mmsi} • ${target.speedKnots.toFixed(1)}kt/${Math.round(target.heading).toString().padStart(3, '0')}°`;
+                d2El.textContent = `RNG:${distNm}NM (${Math.round(distMeters)}m) BRG:${Math.round(bearing).toString().padStart(3, '0')}°`;
+            } else if (target.category === 'WAYPOINT') {
+                typeEl.innerHTML = `<i class="fa-solid fa-location-dot mr-1"></i>ECDIS WPT`;
+                statusEl.textContent = "TUJUAN";
+                statusEl.className = "text-[8px] text-sky-400";
+                nameEl.textContent = target.name;
+                d1El.textContent = `Koordinat Tujuan Misi ${simState.currentScenario}`;
+                d2El.textContent = `RNG:${distNm}NM (${Math.round(distMeters)}m) BRG:${Math.round(bearing).toString().padStart(3, '0')}°`;
+            } else {
+                typeEl.innerHTML = `<i class="fa-solid fa-buoy mr-1"></i>${target.category}`;
+                statusEl.textContent = "OBJEK";
+                statusEl.className = "text-[8px] text-amber-400";
+                nameEl.textContent = target.name;
+                d1El.textContent = target.type ? `Sisi IALA: ${target.type}` : `Bahaya Navigasi Dangkal`;
+                d2El.textContent = `RNG:${distNm}NM (${Math.round(distMeters)}m) BRG:${Math.round(bearing).toString().padStart(3, '0')}°`;
+            }
+        }
+
+        // --- PENGGAMBARAN ARPA RADAR 2D (HEAD-UP MODE + INTERACTIVE CLICK) ---
+        let radarSweepAngle = 0;
+        function drawRadar() {
+            const canvas = document.getElementById('radar-canvas');
+            if (!canvas) return;
+            const ctx = canvas.getContext('2d');
+            const w = canvas.width;
+            const h = canvas.height;
+            const cx = w / 2;
+            const cy = h / 2;
+            const maxRangeMeters = simState.navRangeMeters;
+            simState.clickableRadarObjects = [];
+
+            // Latar Belakang Layar Radar
+            ctx.fillStyle = 'rgba(2, 18, 12, 0.90)';
+            ctx.fillRect(0, 0, w, h);
+
+            // Cincin Jarak Radar (Variable Range Markers / VRM) & Skala Derajat
+            ctx.strokeStyle = 'rgba(16, 185, 129, 0.28)';
+            ctx.lineWidth = 1;
+            [0.33, 0.66, 0.95].forEach(r => {
+                ctx.beginPath();
+                ctx.arc(cx, cy, (w / 2) * r, 0, Math.PI * 2);
+                ctx.stroke();
+            });
+
+            // Penanda Derajat Relatif di Pinggir Radar
+            for (let deg = 0; deg < 360; deg += 30) {
+                const rad = THREE.MathUtils.degToRad(deg);
+                const rOut = w / 2 - 2;
+                const rIn = rOut - (deg % 90 === 0 ? 7 : 4);
+                ctx.beginPath();
+                ctx.moveTo(cx + Math.sin(rad) * rIn, cy - Math.cos(rad) * rIn);
+                ctx.lineTo(cx + Math.sin(rad) * rOut, cy - Math.cos(rad) * rOut);
+                ctx.stroke();
+            }
+
+            // Garis Haluan Kapal (Heading Line - Head Up selalu ke atas)
+            ctx.strokeStyle = 'rgba(56, 189, 248, 0.75)';
+            ctx.beginPath();
+            ctx.moveTo(cx, cy);
+            ctx.lineTo(cx, 4);
+            ctx.stroke();
+
+            const headingRad = THREE.MathUtils.degToRad(simState.heading);
+
+            // Fungsi konversi koordinat dunia ke layar radar (Head-Up)
+            function worldToRadar(wx, wz) {
+                const dx = wx - simState.x;
+                const dz = wz - simState.z;
+                const rx = dx * Math.cos(headingRad) + dz * Math.sin(headingRad);
+                const rz = -dx * Math.sin(headingRad) + dz * Math.cos(headingRad);
+                const scale = (w / 2) / maxRangeMeters;
+                return {
+                    px: cx + rx * scale,
+                    py: cy + rz * scale
+                };
+            }
+
+            // 1. Gambar Pulau / Dermaga di Radar (Echo Kuning/Hijau Tebal)
+            simState.islands.forEach(isl => {
+                const pos = worldToRadar(isl.x, isl.z);
+                const rPx = Math.max(5, (isl.radius / maxRangeMeters) * (w / 2));
+                ctx.fillStyle = 'rgba(234, 179, 8, 0.55)';
+                ctx.beginPath();
+                ctx.arc(pos.px, pos.py, rPx, 0, Math.PI * 2);
+                ctx.fill();
+                simState.clickableRadarObjects.push({ px: pos.px, py: pos.py, hitR: rPx + 6, data: isl });
+            });
+
+            // 1b. Gambar Echo Dermaga Pelabuhan di Radar ARPA
+            simState.portStructures.forEach(pier => {
+                const pos = worldToRadar(pier.x, pier.z);
+                const scale = (w / 2) / maxRangeMeters;
+                const pw = Math.max(6, pier.width * scale);
+                const pl = Math.max(12, pier.length * scale);
+                ctx.save();
+                ctx.translate(pos.px, pos.py);
+                ctx.rotate(-headingRad);
+                ctx.fillStyle = 'rgba(250, 204, 21, 0.72)';
+                ctx.fillRect(-pw / 2, -pl / 2, pw, pl);
+                ctx.restore();
+                simState.clickableRadarObjects.push({ px: pos.px, py: pos.py, hitR: Math.max(pw, pl) * 0.5 + 6, data: pier });
+            });
+
+            // 2. Gambar Pelampung (Buoys)
+            simState.buoys.forEach(b => {
+                const pos = worldToRadar(b.x, b.z);
+                ctx.fillStyle = b.type === 'PORT' ? '#f87171' : (b.type === 'STBD' ? '#4ade80' : '#facc15');
+                ctx.beginPath();
+                ctx.arc(pos.px, pos.py, 3, 0, Math.PI * 2);
+                ctx.fill();
+                simState.clickableRadarObjects.push({ px: pos.px, py: pos.py, hitR: 9, data: b });
+            });
+
+            // 3. Gambar Target Kapal AIS/ARPA (Segitiga AIS + Vektor Kecepatan + Label Nama)
+            simState.aiShips.forEach(ai => {
+                const pos = worldToRadar(ai.x, ai.z);
+                const relHeading = THREE.MathUtils.degToRad(ai.heading - simState.heading);
+                const isSelected = simState.selectedTarget && simState.selectedTarget.id === ai.id;
+
+                // Lingkaran Seleksi jika target diklik
+                if (isSelected) {
+                    ctx.strokeStyle = '#facc15';
+                    ctx.lineWidth = 1.5;
+                    ctx.beginPath();
+                    ctx.arc(pos.px, pos.py, 9, 0, Math.PI * 2);
+                    ctx.stroke();
+                }
+
+                // Simbol Segitiga Target AIS berorientasi haluan
+                ctx.save();
+                ctx.translate(pos.px, pos.py);
+                ctx.rotate(relHeading);
+                ctx.strokeStyle = isSelected ? '#facc15' : '#38bdf8';
+                ctx.fillStyle = isSelected ? 'rgba(250, 204, 21, 0.35)' : 'rgba(56, 189, 248, 0.25)';
+                ctx.lineWidth = 1.5;
+                ctx.beginPath();
+                ctx.moveTo(0, -6);
+                ctx.lineTo(4.5, 5);
+                ctx.lineTo(-4.5, 5);
+                ctx.closePath();
+                ctx.fill();
+                ctx.stroke();
+                ctx.restore();
+
+                // Garis Vektor Gerak Target (COG/SOG Vector)
+                ctx.strokeStyle = isSelected ? '#facc15' : '#38bdf8';
+                ctx.beginPath();
+                ctx.moveTo(pos.px, pos.py);
+                ctx.lineTo(pos.px + Math.sin(relHeading) * 16, pos.py - Math.cos(relHeading) * 16);
+                ctx.stroke();
+
+                // Label Nama Singkat Target di Radar
+                ctx.fillStyle = isSelected ? '#fef08a' : '#a7f3d0';
+                ctx.font = 'bold 8px "JetBrains Mono", monospace';
+                ctx.fillText(ai.name.split('(')[0].trim(), pos.px + 7, pos.py + 3);
+
+                simState.clickableRadarObjects.push({ px: pos.px, py: pos.py, hitR: 13, data: ai });
+            });
+
+            // 4. Gambar Titik Tujuan Misi (Goal Waypoint)
+            const goalP = worldToRadar(simState.goalPos.x, simState.goalPos.z);
+            ctx.strokeStyle = '#38bdf8';
+            ctx.setLineDash([2, 2]);
+            ctx.beginPath();
+            ctx.arc(goalP.px, goalP.py, 6, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.setLineDash([]);
+            simState.clickableRadarObjects.push({
+                px: goalP.px,
+                py: goalP.py,
+                hitR: 12,
+                data: { id: 'WPT-GOAL', name: `Waypoint Tujuan Misi ${simState.currentScenario}`, category: 'WAYPOINT', x: simState.goalPos.x, z: simState.goalPos.z }
+            });
+
+            // 5. Sapuan Garis Radar (Radar Sweep Line)
+            radarSweepAngle = (radarSweepAngle + 0.045) % (Math.PI * 2);
+            const grad = ctx.createLinearGradient(
+                cx, cy,
+                cx + Math.cos(radarSweepAngle) * (w / 2),
+                cy + Math.sin(radarSweepAngle) * (h / 2)
+            );
+            grad.addColorStop(0, 'rgba(16, 185, 129, 0.65)');
+            grad.addColorStop(1, 'rgba(16, 185, 129, 0.05)');
+            ctx.strokeStyle = grad;
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(cx, cy);
+            ctx.lineTo(cx + Math.cos(radarSweepAngle) * (w / 2), cy + Math.sin(radarSweepAngle) * (h / 2));
+            ctx.stroke();
+
+            // Titik Kapal Sendiri di Tengah Radar
+            ctx.fillStyle = '#ffffff';
+            ctx.beginPath();
+            ctx.arc(cx, cy, 2.8, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
+        // --- PENGGAMBARAN ECDIS (ELECTRONIC CHART DISPLAY & INFORMATION SYSTEM - NORTH UP) ---
+        function drawECDIS() {
+            const canvas = document.getElementById('ecdis-canvas');
+            if (!canvas) return;
+            const ctx = canvas.getContext('2d');
+            const w = canvas.width;
+            const h = canvas.height;
+            const cx = w / 2;
+            const cy = h / 2;
+            const maxRangeMeters = simState.navRangeMeters * 1.15;
+            const scale = (w / 2) / maxRangeMeters;
+            simState.clickableEcdisObjects = [];
+
+            // 1. Latar Belakang Perairan Dalam ECDIS (S-52 Night/Dusk Palette)
+            ctx.fillStyle = '#071e34';
+            ctx.fillRect(0, 0, w, h);
+
+            // Grid Lintang & Bujur Peta Laut Elektronik
+            ctx.strokeStyle = 'rgba(56, 189, 248, 0.14)';
+            ctx.lineWidth = 1;
+            const gridStep = 36;
+            for (let gx = gridStep; gx < w; gx += gridStep) {
+                ctx.beginPath();
+                ctx.moveTo(gx, 0);
+                ctx.lineTo(gx, h);
+                ctx.stroke();
+            }
+            for (let gy = gridStep; gy < h; gy += gridStep) {
+                ctx.beginPath();
+                ctx.moveTo(0, gy);
+                ctx.lineTo(w, gy);
+                ctx.stroke();
+            }
+
+            // Konversi Koordinat Dunia ke Layar ECDIS (North-Up Centered on Own Ship)
+            function worldToEcdis(wx, wz) {
+                return {
+                    px: cx + (wx - simState.x) * scale,
+                    py: cy + (wz - simState.z) * scale
+                };
+            }
+
+            // 2. Garis Rencana Rute Pelayaran (Planned Route Leg - Garis Putus Merah Magenta S-52)
+            const startP = worldToEcdis(0, 0);
+            const goalP = worldToEcdis(simState.goalPos.x, simState.goalPos.z);
+            ctx.strokeStyle = 'rgba(244, 63, 94, 0.75)';
+            ctx.lineWidth = 1.5;
+            ctx.setLineDash([5, 4]);
+            ctx.beginPath();
+            ctx.moveTo(startP.px, startP.py);
+            ctx.lineTo(goalP.px, goalP.py);
+            ctx.stroke();
+            ctx.setLineDash([]);
+
+            // 3. Kontur Daratan / Pulau Dangkal (Safety Contour & Land Area S-52)
+            simState.islands.forEach(isl => {
+                const pos = worldToEcdis(isl.x, isl.z);
+                const rPx = Math.max(7, isl.radius * scale);
+
+                // Area Perairan Dangkal (Safety Depth Blue)
+                ctx.fillStyle = 'rgba(14, 116, 144, 0.45)';
+                ctx.beginPath();
+                ctx.arc(pos.px, pos.py, rPx + 6, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Daratan Pulau (Olive/Gold S-52 Land Tint)
+                ctx.fillStyle = '#5c5328';
+                ctx.strokeStyle = '#eab308';
+                ctx.lineWidth = 1.2;
+                ctx.beginPath();
+                ctx.arc(pos.px, pos.py, rPx, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.stroke();
+
+                simState.clickableEcdisObjects.push({ px: pos.px, py: pos.py, hitR: rPx + 6, data: isl });
+            });
+
+            // 3b. Simbol Dermaga Pelabuhan S-52 di Layar ECDIS
+            simState.portStructures.forEach(pier => {
+                const pos = worldToEcdis(pier.x, pier.z);
+                const pw = Math.max(6, pier.width * scale);
+                const pl = Math.max(12, pier.length * scale);
+                ctx.fillStyle = '#64748b';
+                ctx.strokeStyle = '#facc15';
+                ctx.lineWidth = 1.2;
+                ctx.fillRect(pos.px - pw / 2, pos.py - pl / 2, pw, pl);
+                ctx.strokeRect(pos.px - pw / 2, pos.py - pl / 2, pw, pl);
+                simState.clickableEcdisObjects.push({ px: pos.px, py: pos.py, hitR: Math.max(pw, pl) * 0.5 + 6, data: pier });
+            });
+
+            // 4. Simbol Pelampung IALA di Peta ECDIS
+            simState.buoys.forEach(b => {
+                const pos = worldToEcdis(b.x, b.z);
+                ctx.fillStyle = b.type === 'PORT' ? '#ef4444' : (b.type === 'STBD' ? '#22c55e' : '#facc15');
+                ctx.beginPath();
+                ctx.arc(pos.px, pos.py, 3.2, 0, Math.PI * 2);
+                ctx.fill();
+                simState.clickableEcdisObjects.push({ px: pos.px, py: pos.py, hitR: 9, data: b });
+            });
+
+            // 5. Simbol Waypoint Tujuan (Lingkaran Ganda Magenta ECDIS)
+            ctx.strokeStyle = '#f43f5e';
+            ctx.lineWidth = 1.5;
+            ctx.beginPath();
+            ctx.arc(goalP.px, goalP.py, 7, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.arc(goalP.px, goalP.py, 2.5, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.fillStyle = '#fda4af';
+            ctx.font = 'bold 8px "JetBrains Mono", monospace';
+            ctx.fillText('WPT-1', goalP.px + 8, goalP.py + 3);
+            simState.clickableEcdisObjects.push({
+                px: goalP.px,
+                py: goalP.py,
+                hitR: 12,
+                data: { id: 'WPT-GOAL', name: `Waypoint Tujuan Misi ${simState.currentScenario}`, category: 'WAYPOINT', x: simState.goalPos.x, z: simState.goalPos.z }
+            });
+
+            // 6. Jejak Lintasan Kapal Sendiri (Past Track History)
+            if (simState.shipTrackHistory.length > 1) {
+                ctx.strokeStyle = 'rgba(148, 163, 184, 0.65)';
+                ctx.lineWidth = 1.2;
+                ctx.beginPath();
+                simState.shipTrackHistory.forEach((pt, i) => {
+                    const p = worldToEcdis(pt.x, pt.z);
+                    if (i === 0) ctx.moveTo(p.px, p.py);
+                    else ctx.lineTo(p.px, p.py);
+                });
+                ctx.stroke();
+            }
+
+            // 7. Target AIS di Layar ECDIS
+            simState.aiShips.forEach(ai => {
+                const pos = worldToEcdis(ai.x, ai.z);
+                const aiRad = THREE.MathUtils.degToRad(ai.heading);
+                const isSelected = simState.selectedTarget && simState.selectedTarget.id === ai.id;
+
+                if (isSelected) {
+                    ctx.strokeStyle = '#facc15';
+                    ctx.lineWidth = 1.5;
+                    ctx.beginPath();
+                    ctx.arc(pos.px, pos.py, 9, 0, Math.PI * 2);
+                    ctx.stroke();
+                }
+
+                ctx.save();
+                ctx.translate(pos.px, pos.py);
+                ctx.rotate(aiRad);
+                ctx.strokeStyle = isSelected ? '#facc15' : '#22d3ee';
+                ctx.fillStyle = isSelected ? 'rgba(250, 204, 21, 0.35)' : 'rgba(34, 211, 238, 0.25)';
+                ctx.lineWidth = 1.5;
+                ctx.beginPath();
+                ctx.moveTo(0, -6);
+                ctx.lineTo(4.5, 5);
+                ctx.lineTo(-4.5, 5);
+                ctx.closePath();
+                ctx.fill();
+                ctx.stroke();
+                ctx.restore();
+
+                // Vektor Haluan & Kecepatan AIS
+                ctx.strokeStyle = isSelected ? '#facc15' : '#22d3ee';
+                ctx.beginPath();
+                ctx.moveTo(pos.px, pos.py);
+                ctx.lineTo(pos.px + Math.sin(aiRad) * 16, pos.py - Math.cos(aiRad) * 16);
+                ctx.stroke();
+
+                simState.clickableEcdisObjects.push({ px: pos.px, py: pos.py, hitR: 13, data: ai });
+            });
+
+            // 8. Simbol Kapal Sendiri (Own Ship Double Circle + Heading Vector)
+            const ownHeadingRad = THREE.MathUtils.degToRad(simState.heading);
+            ctx.strokeStyle = '#ffffff';
+            ctx.lineWidth = 1.5;
+            ctx.beginPath();
+            ctx.arc(cx, cy, 5, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.arc(cx, cy, 2, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.moveTo(cx, cy);
+            ctx.lineTo(cx + Math.sin(ownHeadingRad) * 20, cy - Math.cos(ownHeadingRad) * 20);
+            ctx.stroke();
+        }
+
+        // --- KONTROL KAMERA ANJUNGAN, DRONE ATAS & EKSTERIOR ---
+        function updateCameraPosition() {
+            const headingRad = THREE.MathUtils.degToRad(simState.heading);
+            // Offset guncangan kamera saat terjadi benturan kapal
+            const shakeX = (Math.random() - 0.5) * simState.shakeIntensity;
+            const shakeY = (Math.random() - 0.5) * simState.shakeIntensity;
+            const shakeZ = (Math.random() - 0.5) * simState.shakeIntensity;
+
+            if (simState.cameraMode === 'BRIDGE') {
+                // 1. Posisi Mata Perwira Jaga di Navigation Bridge Deck 5 Kapal Penumpang PELNI KM AA 8480
+                const bridgeHeight = 20.2;
+                const bridgeZOffset = -12.2;
+
+                const camX = simState.x - Math.sin(headingRad) * bridgeZOffset + shakeX;
+                const camZ = simState.z + Math.cos(headingRad) * bridgeZOffset + shakeZ;
+                camera.position.set(camX, bridgeHeight + Math.sin(clock.getElapsedTime() * 1.5) * 0.12 + shakeY, camZ);
+
+                const lookAngle = headingRad + simState.camYawOffset;
+                const lookDist = 120;
+                const targetX = camX + Math.sin(lookAngle) * lookDist;
+                const targetY = bridgeHeight - 4.0 + Math.sin(simState.camPitchOffset) * lookDist;
+                const targetZ = camZ - Math.cos(lookAngle) * lookDist;
+
+                camera.lookAt(targetX, targetY, targetZ);
+
+            } else if (simState.cameraMode === 'DRONE') {
+                // 2. View Drone dari Atas (Menampilkan Seluruh Badan Kapal KM AA 8480 dari Haluan hingga Buritan + Alur di Depan)
+                const shipCenterFocusX = simState.x + Math.sin(headingRad) * 12;
+                const shipCenterFocusZ = simState.z - Math.cos(headingRad) * 12;
+
+                // Posisi drone tinggi di atas-belakang buritan agar seluruh panjang 88m badan kapal terlihat utuh dan proporsional
+                const followDist = 72;
+                const droneAngle = headingRad + simState.camYawOffset;
+                const droneX = simState.x - Math.sin(droneAngle) * followDist + shakeX;
+                const droneZ = simState.z + Math.cos(droneAngle) * followDist + shakeZ;
+
+                camera.position.set(droneX, simState.droneHeight + shakeY, droneZ);
+                camera.lookAt(shipCenterFocusX, 4.0, shipCenterFocusZ);
+
+            } else {
+                // 3. Mode Kamera Eksterior (Menampilkan Kemegahan Kapal Penumpang PELNI KM AA 8480)
+                const orbitAngle = headingRad + simState.camYawOffset + Math.PI * 0.32;
+                const dist = simState.camDistance;
+                const centerZ = simState.z;
+                const centerX = simState.x;
+                const camX = centerX - Math.sin(orbitAngle) * dist + shakeX;
+                const camZ = centerZ + Math.cos(orbitAngle) * dist + shakeZ;
+                const camY = Math.max(9, 26 + simState.camPitchOffset * 60) + shakeY;
+
+                camera.position.set(camX, camY, camZ);
+                camera.lookAt(centerX, 9.5, centerZ);
+            }
+        }
+
+        function setupCameraControls(domElement) {
+            let isDragging = false;
+            let prevX = 0;
+            let prevY = 0;
+
+            domElement.addEventListener('mousedown', e => {
+                isDragging = true;
+                prevX = e.clientX;
+                prevY = e.clientY;
+            });
+
+            window.addEventListener('mouseup', () => { isDragging = false; });
+
+            window.addEventListener('mousemove', e => {
+                if (!isDragging) return;
+                const dx = e.clientX - prevX;
+                const dy = e.clientY - prevY;
+                prevX = e.clientX;
+                prevY = e.clientY;
+
+                simState.camYawOffset += dx * 0.005;
+                simState.camPitchOffset = Math.max(-0.4, Math.min(0.4, simState.camPitchOffset - dy * 0.004));
+            });
+
+            // Dukungan Layar Sentuh (Touch Drag untuk Mobile/Tablet)
+            domElement.addEventListener('touchstart', e => {
+                if (e.touches.length === 1) {
+                    isDragging = true;
+                    prevX = e.touches[0].clientX;
+                    prevY = e.touches[0].clientY;
+                }
+            }, { passive: true });
+
+            window.addEventListener('touchend', () => { isDragging = false; });
+
+            window.addEventListener('touchmove', e => {
+                if (!isDragging || e.touches.length !== 1) return;
+                const dx = e.touches[0].clientX - prevX;
+                const dy = e.touches[0].clientY - prevY;
+                prevX = e.touches[0].clientX;
+                prevY = e.touches[0].clientY;
+
+                simState.camYawOffset += dx * 0.005;
+                simState.camPitchOffset = Math.max(-0.4, Math.min(0.4, simState.camPitchOffset - dy * 0.004));
+            }, { passive: true });
+        }
+
+        // --- ALERT & MODAL HELPER ---
+        let currentAlertMode = "info";
+        function showAlert(title, msg, type = "warning") {
+            const box = document.getElementById('alert-box');
+            const titleEl = document.getElementById('alert-title');
+            const msgEl = document.getElementById('alert-msg');
+            const iconEl = document.getElementById('alert-icon');
+            const actionBtn = document.getElementById('alert-action-btn');
+
+            currentAlertMode = type;
+            titleEl.textContent = title;
+            msgEl.textContent = msg;
+
+            if (type === "next-mission") {
+                box.className = "self-center interactive-panel border-2 border-emerald-500 bg-slate-950/95 px-6 py-4 rounded-2xl max-w-md text-center shadow-2xl";
+                iconEl.innerHTML = '<i class="fa-solid fa-circle-check text-emerald-400"></i>';
+                actionBtn.textContent = `Lanjut ke Misi ${simState.currentScenario + 1} ▶`;
+                actionBtn.className = "bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs px-5 py-2 rounded-lg transition shadow-lg";
+            } else if (type === "success") {
+                box.className = "self-center interactive-panel border-2 border-emerald-500 bg-slate-950/95 px-6 py-4 rounded-2xl max-w-md text-center shadow-2xl";
+                iconEl.innerHTML = '<i class="fa-solid fa-trophy text-amber-400"></i>';
+                actionBtn.textContent = "Ulangi Misi Pilihan";
+                actionBtn.className = "bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs px-5 py-2 rounded-lg transition shadow-lg";
+            } else if (type === "fail" || type === "danger") {
+                box.className = "self-center interactive-panel border-2 border-rose-500 bg-slate-950/95 px-6 py-4 rounded-2xl max-w-md text-center shadow-2xl";
+                iconEl.innerHTML = '<i class="fa-solid fa-triangle-exclamation text-rose-500"></i>';
+                actionBtn.textContent = "🔄 Ulangi Misi dari Awal";
+                actionBtn.className = "bg-rose-500 hover:bg-rose-400 text-white font-bold text-xs px-5 py-2 rounded-lg transition shadow-lg";
+            } else {
+                box.className = "self-center interactive-panel border-2 border-amber-500 bg-slate-950/95 px-6 py-4 rounded-2xl max-w-md text-center shadow-2xl";
+                iconEl.innerHTML = '<i class="fa-solid fa-circle-info text-amber-400"></i>';
+                actionBtn.textContent = "Mengerti";
+                actionBtn.className = "bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs px-5 py-2 rounded-lg transition shadow-lg";
+            }
+            box.classList.remove('hidden');
+        }
+
+        function hideAlert() {
+            document.getElementById('alert-box').classList.add('hidden');
+        }
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        // --- EVENT LISTENERS UI & KEYBOARD ---
+        function setupUIEvents() {
+            // Slider Kemudi
+            const rudderSlider = document.getElementById('rudder-slider');
+            rudderSlider.addEventListener('input', e => {
+                setRudderOrder(parseFloat(e.target.value));
+            });
+
+            // --- INTERAKSI SENTUH RODA KEMUDI (TOUCH SHIP'S HELM UNTUK PID) ---
+            const helmArea = document.getElementById('helm-touch-area');
+            let isSteering = false;
+            let prevPointerAngle = 0;
+
+            function getAngleFromCenter(clientX, clientY, element) {
+                const rect = element.getBoundingClientRect();
+                const cx = rect.left + rect.width / 2;
+                const cy = rect.top + rect.height / 2;
+                return Math.atan2(clientY - cy, clientX - cx) * (180 / Math.PI);
+            }
+
+            helmArea.addEventListener('pointerdown', e => {
+                e.stopPropagation();
+                isSteering = true;
+                helmArea.setPointerCapture(e.pointerId);
+                prevPointerAngle = getAngleFromCenter(e.clientX, e.clientY, helmArea);
+                initAudio();
+            });
+
+            helmArea.addEventListener('pointermove', e => {
+                if (!isSteering) return;
+                e.stopPropagation();
+                const currentAngle = getAngleFromCenter(e.clientX, e.clientY, helmArea);
+                let delta = currentAngle - prevPointerAngle;
+
+                // Koreksi lompatan sudut melewati batas -180 / +180 derajat
+                if (delta > 180) delta -= 360;
+                if (delta < -180) delta += 360;
+
+                prevPointerAngle = currentAngle;
+                // Rasio putaran roda kemudi ke derajat daun kemudi
+                setRudderOrder(simState.rudderOrder + delta * 0.22);
+            });
+
+            const stopSteering = e => {
+                if (!isSteering) return;
+                isSteering = false;
+                try { helmArea.releasePointerCapture(e.pointerId); } catch (_) {}
+            };
+            helmArea.addEventListener('pointerup', stopSteering);
+            helmArea.addEventListener('pointercancel', stopSteering);
+
+            // --- INTERAKSI SENTUH TUAS ENGINE TELEGRAPH (EOT LEVER UNTUK PID) ---
+            const eotTrack = document.getElementById('eot-lever-track');
+            const eotHandle = document.getElementById('eot-lever-handle');
+            let isDraggingEOT = false;
+
+            function updateEOTFromPointer(clientY, snapToNotch = false) {
+                const rect = eotTrack.getBoundingClientRect();
+                const relY = Math.max(0, Math.min(rect.height, clientY - rect.top));
+                const pct = (relY / rect.height) * 100;
+
+                // Cari posisi order EOT terdekat dari 7 takik (Full Ahead s.d. Full Astern)
+                const idx = Math.min(
+                    EOT_LEVELS_DESC.length - 1,
+                    Math.max(0, Math.floor((pct / 100) * EOT_LEVELS_DESC.length))
+                );
+                const chosenOrder = EOT_LEVELS_DESC[idx];
+
+                if (!snapToNotch) {
+                    const clampedPct = Math.max(6, Math.min(94, pct));
+                    eotHandle.style.top = `${clampedPct}%`;
+                }
+                setEngineOrder(chosenOrder);
+                if (snapToNotch) {
+                    const cfg = EOT_TABLE[chosenOrder.toString()];
+                    eotHandle.style.top = `${cfg.leverPct}%`;
+                }
+            }
+
+            eotTrack.addEventListener('pointerdown', e => {
+                e.stopPropagation();
+                isDraggingEOT = true;
+                eotHandle.classList.add('dragging');
+                eotTrack.setPointerCapture(e.pointerId);
+                initAudio();
+                updateEOTFromPointer(e.clientY, false);
+            });
+
+            eotTrack.addEventListener('pointermove', e => {
+                if (!isDraggingEOT) return;
+                e.stopPropagation();
+                updateEOTFromPointer(e.clientY, false);
+            });
+
+            const stopDraggingEOT = e => {
+                if (!isDraggingEOT) return;
+                isDraggingEOT = false;
+                eotHandle.classList.remove('dragging');
+                updateEOTFromPointer(e.clientY, true);
+                try { eotTrack.releasePointerCapture(e.pointerId); } catch (_) {}
+            };
+            eotTrack.addEventListener('pointerup', stopDraggingEOT);
+            eotTrack.addEventListener('pointercancel', stopDraggingEOT);
+
+            // Dropdown Skenario
+            document.getElementById('scenario-select').addEventListener('change', e => {
+                loadScenario(e.target.value);
+            });
+
+            // Fungsi Bantu Klik Objek pada Layar Radar ARPA maupun Layar ECDIS
+            function handleDisplayCanvasClick(e, canvasEl, objectList) {
+                e.stopPropagation();
+                const rect = canvasEl.getBoundingClientRect();
+                const scaleX = canvasEl.width / rect.width;
+                const scaleY = canvasEl.height / rect.height;
+                const clickX = (e.clientX - rect.left) * scaleX;
+                const clickY = (e.clientY - rect.top) * scaleY;
+
+                let closestObj = null;
+                let minHitDist = 999;
+                for (const item of objectList) {
+                    const d = Math.hypot(clickX - item.px, clickY - item.py);
+                    if (d <= item.hitR && d < minHitDist) {
+                        minHitDist = d;
+                        closestObj = item.data;
+                    }
+                }
+
+                if (closestObj) {
+                    simState.selectedTarget = closestObj;
+                    playTelegraphBell(0);
+                    updateSelectedObjectInspector();
+                } else {
+                    simState.selectedTarget = null;
+                    updateSelectedObjectInspector();
+                }
+            }
+
+            const radarCanvas = document.getElementById('radar-canvas');
+            radarCanvas.addEventListener('pointerdown', e => {
+                handleDisplayCanvasClick(e, radarCanvas, simState.clickableRadarObjects);
+            });
+
+            const ecdisCanvas = document.getElementById('ecdis-canvas');
+            ecdisCanvas.addEventListener('pointerdown', e => {
+                handleDisplayCanvasClick(e, ecdisCanvas, simState.clickableEcdisObjects);
+            });
+
+            // Kontrol Zoom Skala Jarak Radar & ECDIS (- / +)
+            const RANGE_STEPS = [350, 650, 1050, 1500];
+            function updateRangeLabel() {
+                const nm = (simState.navRangeMeters / 350).toFixed(1);
+                document.getElementById('nav-range-label').textContent = `${nm} NM`;
+            }
+            document.getElementById('btn-range-down').addEventListener('click', () => {
+                const idx = RANGE_STEPS.indexOf(simState.navRangeMeters);
+                if (idx > 0) simState.navRangeMeters = RANGE_STEPS[idx - 1];
+                updateRangeLabel();
+            });
+            document.getElementById('btn-range-up').addEventListener('click', () => {
+                const idx = RANGE_STEPS.indexOf(simState.navRangeMeters);
+                if (idx < RANGE_STEPS.length - 1) simState.navRangeMeters = RANGE_STEPS[idx + 1];
+                updateRangeLabel();
+            });
+
+            // Tombol Waktu Siang / Malam (Latihan Lampu Navigasi P2TL)
+            document.getElementById('btn-time').addEventListener('click', () => {
+                simState.isNight = !simState.isNight;
+                const icon = document.getElementById('icon-time');
+                const text = document.getElementById('text-time');
+
+                if (simState.isNight) {
+                    icon.className = "fa-solid fa-moon text-sky-300";
+                    text.textContent = "Malam";
+                } else {
+                    icon.className = "fa-solid fa-sun text-amber-400";
+                    text.textContent = "Siang";
+                }
+                applyAtmosphereAndWeather();
+            });
+
+            // Tombol Pengatur Cuaca (Cerah -> Kabut Tebal -> Hujan Badai)
+            document.getElementById('btn-weather').addEventListener('click', () => {
+                const icon = document.getElementById('icon-weather');
+                const text = document.getElementById('text-weather');
+
+                if (simState.weatherMode === 'CLEAR') {
+                    simState.weatherMode = 'FOG';
+                    icon.className = "fa-solid fa-smog text-slate-300";
+                    text.textContent = "Kabut";
+                    speakTelegraphOrder("Cuaca berkabut tebal, jarak pandang terbatas. Perhatikan aturan sembilan belas P2TL.");
+                } else if (simState.weatherMode === 'FOG') {
+                    simState.weatherMode = 'STORM';
+                    icon.className = "fa-solid fa-cloud-showers-heavy text-sky-400";
+                    text.textContent = "Badai";
+                    speakTelegraphOrder("Peringatan cuaca buruk, hujan badai di alur pelayaran.");
+                } else {
+                    simState.weatherMode = 'CLEAR';
+                    icon.className = "fa-solid fa-cloud-sun text-amber-300";
+                    text.textContent = "Cerah";
+                    speakTelegraphOrder("Cuaca kembali cerah, jarak pandang normal.");
+                }
+                applyAtmosphereAndWeather();
+            });
+
+            // Tombol Pengatur Gelombang Laut (Tenang -> Sedang -> Ombak Besar -> Teduh)
+            const WAVE_PRESETS = [
+                { level: 0, label: 'Teduh',        amp: 0.12, freq: 1.1, beaufort: 'Beaufort 1', wind: '045° / 3 kt (Teduh)' },
+                { level: 1, label: 'Tenang',       amp: 0.38, freq: 1.6, beaufort: 'Beaufort 2', wind: '045° / 8 kt (Tenang)' },
+                { level: 2, label: 'Bergelombang', amp: 1.15, freq: 2.2, beaufort: 'Beaufort 5', wind: '060° / 20 kt (Sedang)' },
+                { level: 3, label: 'Ombak Besar',  amp: 2.35, freq: 2.8, beaufort: 'Beaufort 7', wind: '075° / 34 kt (Kencang)' }
+            ];
+
+            document.getElementById('btn-waves').addEventListener('click', () => {
+                simState.waveLevel = (simState.waveLevel + 1) % WAVE_PRESETS.length;
+                const preset = WAVE_PRESETS[simState.waveLevel];
+                simState.waveAmplitude = preset.amp;
+                simState.waveFrequency = preset.freq;
+
+                document.getElementById('text-waves').textContent = preset.label;
+                document.getElementById('sea-state-badge').textContent = preset.beaufort;
+                document.getElementById('hud-wind').textContent = preset.wind;
+
+                const waveIcon = document.getElementById('icon-waves');
+                if (simState.waveLevel >= 2) {
+                    waveIcon.className = "fa-solid fa-house-tsunami text-amber-400";
+                } else {
+                    waveIcon.className = "fa-solid fa-water text-teal-400";
+                }
+            });
+
+            // Tombol Kamera (Anjungan -> Drone Atas -> Luar 3D)
+            document.getElementById('btn-cam').addEventListener('click', () => {
+                if (simState.cameraMode === 'BRIDGE') {
+                    simState.cameraMode = 'DRONE';
+                } else if (simState.cameraMode === 'DRONE') {
+                    simState.cameraMode = 'EXTERIOR';
+                } else {
+                    simState.cameraMode = 'BRIDGE';
+                }
+                simState.camYawOffset = 0;
+                simState.camPitchOffset = -0.05;
+
+                const camLabel = simState.cameraMode === 'BRIDGE' 
+                    ? 'Anjungan' 
+                    : (simState.cameraMode === 'DRONE' ? 'Drone Atas' : 'Orbit 3D');
+                document.getElementById('text-cam').textContent = camLabel;
+
+                // Sembunyikan pilar bingkai jendela saat mode Drone atau Orbit
+                document.querySelectorAll('.bridge-frame, .bridge-pillar-left, .bridge-pillar-right').forEach(el => {
+                    el.style.opacity = simState.cameraMode === 'BRIDGE' ? '1' : '0';
+                });
+            });
+
+            // Sinkronkan label & bingkai awal (Default DRONE ATAS untuk memperlihatkan seluruh badan kapal KM AA 8480)
+            document.getElementById('text-cam').textContent = 'Drone Atas';
+            document.querySelectorAll('.bridge-frame, .bridge-pillar-left, .bridge-pillar-right').forEach(el => {
+                el.style.opacity = '0';
+            });
+
+            // Tombol Ganti Tipe Kapal (NKN vs NKPI)
+            document.getElementById('btn-vessel').addEventListener('click', () => {
+                setVesselType(simState.vesselType === 'NKN' ? 'NKPI' : 'NKN');
+            });
+
+            // Tombol Suara Mesin Kapal (ON / OFF)
+            document.getElementById('btn-engine-sound').addEventListener('click', () => {
+                initAudio();
+                simState.engineSoundEnabled = !simState.engineSoundEnabled;
+                const btn = document.getElementById('btn-engine-sound');
+                const icon = document.getElementById('icon-engine-sound');
+                const text = document.getElementById('text-engine-sound');
+                if (simState.engineSoundEnabled) {
+                    btn.className = "text-[10px] font-mono-tech font-bold text-emerald-400 hover:text-emerald-300 flex items-center gap-1";
+                    icon.className = "fa-solid fa-volume-high";
+                    text.textContent = "Mesin: ON";
+                } else {
+                    btn.className = "text-[10px] font-mono-tech font-bold text-slate-500 hover:text-slate-400 flex items-center gap-1";
+                    icon.className = "fa-solid fa-volume-xmark";
+                    text.textContent = "Mesin: OFF";
+                }
+                updateShipEngineSound();
+            });
+
+            // Tombol Reset Skenario
+            document.getElementById('btn-reset').addEventListener('click', () => {
+                loadScenario(simState.currentScenario);
+            });
+
+            // Tombol Aba-aba Mulai Misi (Launch Mission Countdown)
+            document.getElementById('btn-launch-mission').addEventListener('click', () => {
+                startMissionWithCountdown();
+            });
+
+            // Tombol Lampu Navigasi P2TL
+            document.getElementById('btn-lights').addEventListener('click', () => {
+                simState.navLightsOn = !simState.navLightsOn;
+                ownShipLightsGroup.visible = simState.navLightsOn;
+                const st = document.getElementById('lights-status');
+                st.textContent = simState.navLightsOn ? "ON" : "OFF";
+                st.className = simState.navLightsOn ? "font-mono-tech font-bold text-emerald-400" : "font-mono-tech font-bold text-rose-400";
+            });
+
+            // Modal Panduan
+            const modal = document.getElementById('modal-panduan');
+            document.getElementById('btn-panduan').addEventListener('click', () => modal.classList.remove('hidden'));
+            document.getElementById('close-panduan').addEventListener('click', () => modal.classList.add('hidden'));
+            document.getElementById('start-sim-btn').addEventListener('click', () => {
+                initAudio();
+                modal.classList.add('hidden');
+            });
+
+            document.getElementById('alert-action-btn').addEventListener('click', () => {
+                hideAlert();
+                if (currentAlertMode === "fail" || currentAlertMode === "danger") {
+                    // Wajib ulang dari awal jika melanggar aturan P2TL atau menabrak
+                    loadScenario(simState.currentScenario);
+                } else if (currentAlertMode === "next-mission") {
+                    // Lanjut ke misi berikutnya yang baru terbuka
+                    loadScenario(simState.currentScenario + 1);
+                } else if (currentAlertMode === "success") {
+                    loadScenario(simState.currentScenario);
+                }
+            });
+
+            // Kontrol Keyboard Lengkap (W/S: Telegraph, A/D: Kemudi, C: Midships, Space/1/2/3/5: Isyarat Suling P2TL)
+            window.addEventListener('keydown', e => {
+                if (e.key === 'a' || e.key === 'A' || e.key === 'ArrowLeft') {
+                    setRudderOrder(simState.rudderOrder - 5);
+                } else if (e.key === 'd' || e.key === 'D' || e.key === 'ArrowRight') {
+                    setRudderOrder(simState.rudderOrder + 5);
+                } else if (e.key === 'c' || e.key === 'C') {
+                    setRudderOrder(0);
+                } else if (e.key === 'w' || e.key === 'W' || e.key === 'ArrowUp') {
+                    if (simState.eotOrder < 4) setEngineOrder(simState.eotOrder + 1);
+                } else if (e.key === 's' || e.key === 'S' || e.key === 'ArrowDown') {
+                    if (simState.eotOrder > -2) setEngineOrder(simState.eotOrder - 1);
+                } else if (e.code === 'Space' || e.key === '1') {
+                    e.preventDefault();
+                    triggerColregHorn(1);
+                } else if (e.key === '2') {
+                    triggerColregHorn(2);
+                } else if (e.key === '3') {
+                    triggerColregHorn(3);
+                } else if (e.key === '5') {
+                    triggerColregHorn(5);
+                }
+            });
+        }
+
+        // --- MAIN ANIMATION LOOP ---
+        function animate() {
+            requestAnimationFrame(animate);
+            const dt = clock.getDelta();
+
+            updatePhysics(dt);
+            updateCameraPosition();
+            drawRadar();
+            drawECDIS();
+
+            renderer.render(scene, camera);
+        }
+
+        // Jalankan saat halaman selesai dimuat
+        window.onload = function () {
+            initThreeJS();
+            setupUIEvents();
+            animate();
+        };
+    </script>
+</body>
+</html>
